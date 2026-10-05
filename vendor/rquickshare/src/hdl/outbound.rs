@@ -252,10 +252,10 @@ impl OutboundRequest {
                 ),
                 connection_request: Some(location_nearby_connections::ConnectionRequestFrame {
                     endpoint_id: Some(String::from_utf8_lossy(&self.endpoint_id).to_string()),
-                    endpoint_name: Some(hostname::get()?.to_string_lossy().into_owned().into()),
+                    endpoint_name: Some(crate::utils::device_name().into()),
                     endpoint_info: Some(
                         RemoteDeviceInfo {
-                            name: hostname::get()?.to_string_lossy().into_owned(),
+                            name: crate::utils::device_name(),
                             device_type: DeviceType::Laptop,
                         }
                         .serialize(),
@@ -732,6 +732,7 @@ impl OutboundRequest {
                             bytes_transferred: 0,
                             total_size: fmeta.size(),
                             file: Some(file),
+                            mime_type: String::new(),
                         },
                     );
                     file_metadata.push(fmeta);
@@ -886,6 +887,7 @@ impl OutboundRequest {
                                     bytes_transferred: curr_state.bytes_transferred,
                                     total_size: curr_state.total_size,
                                     file: None,
+                                    mime_type: String::new(),
                                 },
                                 buffer,
                                 bytes_read,

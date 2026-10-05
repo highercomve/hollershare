@@ -1,5 +1,9 @@
 const $ = id => document.getElementById(id);
 let files = [], model = null, sending = false, polling = false, share_mode = "files";
+// Android: received files land in GhostShare's folder, then move to the
+// folder chosen in Settings (model.relocations); opening them is left to
+// the Files app.
+let platform_android = false, settings = null;
 function ready_to_send() { return share_mode === "text" ? $("clipboard-text").value.length > 0 : files.length > 0; }
 function set_share_mode(mode) {
   share_mode = mode;
@@ -124,9 +128,9 @@ function render_transfers() {
       const actions = element("div", "request-actions");
       const controls = [];
       const is_text = !meta.files;
-      if (!is_text) request.appendChild(element("div", "small", "Default folder · " + model.download_dir));
+      if (!is_text) request.appendChild(element("div", "small", (platform_android ? "Saves to " : "Default folder · ") + folder_label()));
       controls.push(button(is_text ? "Accept" : "Accept to default", "primary", () => decision(transfer.id, true, controls)));
-      if (!is_text) controls.push(button("Choose folder…", "secondary", () => decision(transfer.id, true, controls, true)));
+      if (!is_text && !platform_android) controls.push(button("Choose folder…", "secondary", () => decision(transfer.id, true, controls, true)));
       controls.push(button("Decline", "secondary", () => decision(transfer.id, false, controls)));
       for (const control of controls) actions.appendChild(control);
       request.appendChild(actions); $("requests").appendChild(request);
@@ -148,7 +152,8 @@ function render_transfers() {
       });
       detail.appendChild(copy);
     }
-    if (transfer.state === "Finished" && (incoming ? meta.saved_files : meta.files)) {
+    if (platform_android && transfer.state === "Finished" && incoming && meta.saved_files) render_relocation(detail, transfer);
+    else if (transfer.state === "Finished" && !platform_android && (incoming ? meta.saved_files : meta.files)) {
       const actions = element("div", "file-actions");
       const paths = (incoming ? meta.saved_files : meta.files) || [];
       paths.forEach((path, index) => actions.appendChild(button(paths.length === 1 ? "Open file" : "Open " + path.split(/[\\/]/).pop(), "secondary", async () => {
@@ -170,21 +175,46 @@ function render_transfers() {
     row.appendChild(status); $("transfers").appendChild(row);
   }
 }
+// Android: where a finished transfer's files are. Opening them needs the
+// Files app: GhostShare can't hand them to another app.
+function render_relocation(detail, transfer) {
+  const moved = (model.relocations || {})[transfer.id];
+  const files_app = " · Open them from your Files app";
+  if (!moved) { detail.appendChild(element("div", "small", "Saved in GhostShare’s folder" + files_app)); return; }
+  const names = moved.names || [];
+  if (moved.state === "moving") detail.appendChild(element("div", "small", "Moving to " + moved.folder + "…"));
+  else if (moved.state === "moved") detail.appendChild(element("div", "small", "Saved to " + moved.folder + (names.length === 1 ? " as " + names[0] : "") + files_app));
+  else {
+    const kept = moved.kept || 0;
+    detail.appendChild(element("div", "small", (names.length ? names.length + " saved to " + moved.folder + ", " : "") + kept + (kept === 1 ? " file stays" : " files stay") + " in GhostShare’s folder" + files_app));
+  }
+  if (moved.error) detail.appendChild(element("div", "small relocation-error", moved.error));
+}
+// Where received files go, for the request card and the footer.
+function folder_label() {
+  if (platform_android && settings && settings.download_folder) return settings.download_folder_name + (settings.folder_available ? "" : " (unavailable)");
+  if (platform_android) return "GhostShare’s folder";
+  return model ? model.download_dir : "";
+}
 let previous_peers = "", previous_transfers = "";
+// The banner shows a failed snapshot until one succeeds (the engine may
+// still be starting when the page first asks).
+let poll_failed = false;
 async function poll() {
   if (polling) return;
   polling = true;
   try {
     model = await call("snapshot");
+    if (poll_failed) { poll_failed = false; $("error").hidden = true; }
     $("visibility").textContent = model.visible ? "● Visible to nearby devices" : "○ Hidden from nearby devices";
     $("visibility").className = "presence" + (model.visible ? "" : " off");
     $("identity").textContent = "This computer · " + model.name;
-    $("downloads").textContent = "Save to " + model.download_dir;
+    $("downloads").textContent = "Save to " + folder_label();
     if (model.error) error(model.error);
-    const peers = JSON.stringify(model.peers), transfers = JSON.stringify(model.transfers);
+    const peers = JSON.stringify(model.peers), transfers = JSON.stringify([model.transfers, model.relocations]);
     if (peers !== previous_peers) { previous_peers = peers; render_peers(); }
     if (transfers !== previous_transfers) { previous_transfers = transfers; render_transfers(); }
-  } catch (err) { error(err.message || err); $("visibility").textContent = "Quick Share unavailable"; }
+  } catch (err) { poll_failed = true; error(err.message || err); $("visibility").textContent = "Quick Share unavailable"; }
   finally { polling = false; }
 }
 async function choose_files() {
@@ -216,15 +246,110 @@ render_files(); poll(); setInterval(poll, 800);
 let theme_event_received = false;
 function set_theme(dark) { document.documentElement.setAttribute("data-theme", dark ? "dark" : "light"); }
 if (window.oriel) {
-  call("system_info").then(info => !theme_event_received && typeof info.dark === "boolean" && set_theme(info.dark)).catch(err => error(err.message || err));
+  call("system_info").then(info => {
+    platform_android = !!info.android;
+    if (!theme_event_received && typeof info.dark === "boolean") set_theme(info.dark);
+    previous_transfers = ""; return poll();
+  }).catch(err => error(err.message || err));
   window.oriel.listen("system_theme", info => { theme_event_received = true; if (typeof info.dark === "boolean") set_theme(info.dark); });
   window.oriel.listen("tray_send", () => { set_share_mode("files"); choose_files(); });
   window.oriel.listen("tray_clipboard", paste_clipboard);
   window.oriel.listen("tray_visibility", () => poll());
   window.oriel.listen("review_request", () => poll());
   window.oriel.listen("notification_error", error);
+  window.oriel.listen("folder_error", message => {
+    error(message);
+    if (settings) { settings.folder_available = false; render_folder(); }
+  });
 }
 $("quit").addEventListener("click", () => call("quit"));
+
+// Settings: the advertised name and the download folder. Empty fields are
+// the defaults (the system's name, the platform's folder).
+let settings_busy = false;
+function field_error(id, message) { $(id).textContent = message || ""; $(id).hidden = !message; }
+// The same rules as src/settings.zig: trimmed, up to 64 characters, no control characters.
+function name_problem(name) {
+  if (/[\u0000-\u001f\u007f-\u009f]/.test(name)) return "The name can't contain control characters";
+  const chars = Array.from(name), utf8 = chars.reduce((n, c) => { const p = c.codePointAt(0); return n + (p < 0x80 ? 1 : p < 0x800 ? 2 : p < 0x10000 ? 3 : 4); }, 0);
+  if (chars.length > 64 || utf8 > 170) return "Use a shorter name (up to 64 characters)";
+  return "";
+}
+function render_settings() {
+  if (!settings) return;
+  $("device-name").value = settings.device_name;
+  $("device-name").placeholder = settings.system_name || "This device";
+  render_folder();
+}
+// The folder: its name, and its path (desktop) or what happens to files
+// (Android). Chosen with the system's folder picker, applied at once.
+function render_folder() {
+  if (!settings) return;
+  const chosen = settings.download_folder.length > 0;
+  $("download-name").textContent = chosen ? (settings.download_folder_name || settings.download_folder) : (platform_android ? "GhostShare’s folder" : "Default folder");
+  let detail;
+  if (chosen && !settings.folder_available) detail = "Unavailable · GhostShare can’t save here any more. Choose the folder again, or use the default folder.";
+  else if (chosen) detail = settings.android ? "Finished transfers move here" : settings.download_folder;
+  else detail = model ? model.download_dir : "";
+  $("download-detail").textContent = detail;
+  $("download-detail").hidden = !detail;
+  $("download-current").className = "path folder" + (chosen && !settings.folder_available ? " unavailable" : "");
+  $("download-browse").hidden = !settings.folder_picker;
+  $("download-default").hidden = !chosen;
+  $("download-help-text").textContent = settings.android
+    ? (chosen ? "GhostShare receives into its own folder, then moves each finished transfer here." : "Received files stay in GhostShare’s own folder. Choose a folder to move them somewhere you can find them.")
+    : "New transfers are saved here.";
+  if (model) $("downloads").textContent = "Save to " + folder_label();
+}
+async function load_settings() {
+  try { settings = await call("settings_get"); render_folder(); } catch (_) {}
+}
+async function open_settings() {
+  $("settings").hidden = false; $("settings-open").setAttribute("aria-expanded", "true");
+  field_error("device-name-error"); field_error("download-dir-error"); $("settings-status").textContent = "";
+  try { settings = await call("settings_get"); render_settings(); $("device-name").focus(); }
+  catch (err) { field_error("download-dir-error", err.message || err); }
+}
+function close_settings() { $("settings").hidden = true; $("settings-open").setAttribute("aria-expanded", "false"); }
+const settings_controls = ["settings-save", "settings-reset", "download-browse", "download-default"];
+function settings_disabled(disabled) { for (const id of settings_controls) $(id).disabled = disabled; }
+async function save_settings(device_name, default_folder) {
+  if (settings_busy) return;
+  field_error("device-name-error"); field_error("download-dir-error"); $("settings-status").textContent = "";
+  const problem = name_problem(device_name.trim());
+  if (problem) { field_error("device-name-error", problem); return; }
+  settings_busy = true; settings_disabled(true);
+  try {
+    settings = await call("settings_save", { device_name, default_folder });
+    await poll(); render_settings();
+    $("settings-status").textContent = "Saved · Nearby devices now see " + (model ? model.name : settings.device_name || settings.system_name);
+  } catch (err) {
+    const message = String(err.message || err);
+    field_error(/name/i.test(message) ? "device-name-error" : "download-dir-error", message);
+  } finally { settings_busy = false; settings_disabled(false); }
+}
+// "Choose…" (the folder picker) and "Use default folder": saved at once;
+// the name field keeps what's being typed.
+async function change_folder(choose) {
+  if (settings_busy) return;
+  field_error("download-dir-error"); $("settings-status").textContent = "";
+  settings_busy = true; settings_disabled(true);
+  try {
+    const before = settings && settings.download_folder;
+    settings = await call("settings_folder", { choose });
+    await poll(); render_folder(); if (model) { previous_transfers = ""; render_transfers(); }
+    if (settings.download_folder !== before) $("settings-status").textContent = "Saved · Received files go to " + (settings.download_folder ? settings.download_folder_name : (platform_android ? "GhostShare’s folder" : "the default folder"));
+  } catch (err) { field_error("download-dir-error", err.message || err); }
+  finally { settings_busy = false; settings_disabled(false); }
+}
+$("settings-open").addEventListener("click", () => $("settings").hidden ? open_settings() : close_settings());
+$("settings-close").addEventListener("click", close_settings);
+$("settings-save").addEventListener("click", () => save_settings($("device-name").value, false));
+$("settings-reset").addEventListener("click", () => save_settings("", true));
+$("download-default").addEventListener("click", () => change_folder(false));
+$("download-browse").addEventListener("click", () => change_folder(true));
+$("device-name").addEventListener("input", () => field_error("device-name-error", name_problem($("device-name").value.trim())));
+if (window.oriel) load_settings();
 
 let update_busy = false, update_android = false, update_version = "";
 async function check_updates() {
@@ -260,7 +385,17 @@ $("update-restart").addEventListener("click", async () => {
   if (active_transfers()) { $("update-status").textContent = "Finish or cancel your transfers before restarting"; return; }
   try { await call("updater_restart"); } catch (err) { $("update-status").textContent = String(err.message || err); }
 });
+// Quick Share finds devices over Bluetooth LE and mDNS: ask for both at
+// startup (Android shows the "Nearby devices" prompt; elsewhere the OS
+// answers without one). A refusal isn't fatal: discovery carries on.
+async function request_permissions() {
+  if (!window.oriel.permissions) return;
+  for (const name of ["bluetooth", "local_network"]) {
+    try { await window.oriel.permissions.request(name); } catch (_) {}
+  }
+}
 if (window.oriel) {
+  request_permissions();
   window.oriel.listen("tray_update", check_updates);
   window.oriel.listen("updater://progress", progress => {
     $("update-status").textContent = "Downloading update · " + (progress.total ? Math.round(progress.downloaded / progress.total * 100) + "%" : bytes(progress.downloaded));

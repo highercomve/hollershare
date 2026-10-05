@@ -2,4 +2,10 @@
 import type { RemoteDeviceInfo } from "./RemoteDeviceInfo";
 import type { TextPayloadType } from "./TextPayloadType";
 
-export type TransferMetadata = { id: string, source: RemoteDeviceInfo | null, pin_code: string | null, destination: string | null, files: Array<string> | null, saved_files: Array<string> | null, text_type: TextPayloadType | null, text_description: string | null, text_payload: string | null, total_bytes: bigint, ack_bytes: bigint, };
+export type TransferMetadata = { id: string, source: RemoteDeviceInfo | null, pin_code: string | null, destination: string | null, files: Array<string> | null, saved_files: Array<string> | null, 
+/**
+ * Inbound, parallel to `saved_files`: each file's name as the sender
+ * gave it (a saved file may be "1_name" after a clash) and the MIME
+ * type it gave (empty when none).
+ */
+saved_names: Array<string> | null, saved_mime_types: Array<string> | null, text_type: TextPayloadType | null, text_description: string | null, text_payload: string | null, total_bytes: bigint, ack_bytes: bigint, };

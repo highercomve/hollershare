@@ -16,6 +16,9 @@ GhostShare modifications:
 - Preserve partially read frame headers across cancelled reads and bound frame-read timeouts.
 - Run outbound connections independently of accepting inbound connections; propagate connection failures with the correct transfer ID.
 - Shut down mDNS daemons and avoid unregistering an already hidden service.
+- Use Android NsdManager for both discovery and advertising, including saved-name changes and visibility. Announce Android endpoints as phones; avoid desktop multicast daemons on Android and report initial registration failures during startup.
+- Advertise desktop mDNS hosts with the fully qualified `.local.` suffix so Android NsdManager can resolve their addresses.
+- Exclude self-discovery using connected socket addresses even when native interface enumeration is unavailable on Android.
 - Remove TypeScript binding writes during build.
 
 Original schemas and copyright headers are retained. Regression coverage lives in the library tests and ../../tests/quickshare_loopback.py.

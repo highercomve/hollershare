@@ -1,11 +1,11 @@
 .{
     .name = .ghostshare,
-    .version = "0.1.0",
+    .version = "0.2.0",
     // Derived from the package name; changing it has security and trust implications.
     .fingerprint = 0x5ad609f2496ebfd9,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
-        .oriel = .{ .path = "../oriel-ghostshare" },
+        .oriel = .{ .path = "../oriel" },
     },
     .paths = .{ "build.zig", "build.zig.zon", "src", "frontend", "README.md", "native", "vendor", "Cargo.toml", "Cargo.lock", "LICENSE", "icon.png", "assets", "tests", "install-local.sh" },
 }

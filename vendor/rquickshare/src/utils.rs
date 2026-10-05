@@ -19,6 +19,56 @@ use ts_rs::TS;
 
 use crate::CUSTOM_DOWNLOAD;
 
+/// The name this device announces (mDNS endpoint info, connection
+/// requests), set by the embedding app; None: the host name.
+static DEVICE_NAME: std::sync::RwLock<Option<String>> = std::sync::RwLock::new(None);
+
+/// Bumped each time the device name changes, so that a running mDNS
+/// service can announce the new name (`subscribe_device_name`).
+static DEVICE_NAME_CHANGES: once_cell::sync::Lazy<tokio::sync::watch::Sender<u64>> =
+    once_cell::sync::Lazy::new(|| tokio::sync::watch::channel(0).0);
+
+/// Notified whenever `set_device_name` changes the name.
+pub fn subscribe_device_name() -> tokio::sync::watch::Receiver<u64> {
+    DEVICE_NAME_CHANGES.subscribe()
+}
+
+/// Set (or clear, with None or an empty name) the name nearby devices see.
+/// Connections use it from then on, and a running mDNS service re-announces
+/// itself with it.
+pub fn set_device_name(name: Option<String>) {
+    let name = name.map(|n| n.trim().to_string()).filter(|n| !n.is_empty()).map(|mut n| {
+        // The endpoint info carries the name's length in one byte.
+        let mut end = n.len().min(u8::MAX as usize);
+        while !n.is_char_boundary(end) {
+            end -= 1;
+        }
+        n.truncate(end);
+        n
+    });
+    let changed = match DEVICE_NAME.write() {
+        Ok(mut guard) if *guard != name => {
+            *guard = name;
+            true
+        }
+        _ => false,
+    };
+    if changed {
+        DEVICE_NAME_CHANGES.send_modify(|generation| *generation += 1);
+    }
+}
+
+/// The name nearby devices see: the one set with `set_device_name`, else
+/// the host name.
+pub fn device_name() -> String {
+    if let Some(name) = DEVICE_NAME.read().ok().and_then(|g| g.clone()) {
+        return name;
+    }
+    hostname::get()
+        .map(|h| h.to_string_lossy().into_owned())
+        .unwrap_or_else(|_| "Device".into())
+}
+
 #[derive(Debug, Clone, Deserialize, PartialEq, Serialize, TS)]
 #[ts(export)]
 #[allow(dead_code)]

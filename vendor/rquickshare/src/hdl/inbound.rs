@@ -874,6 +874,7 @@ impl InboundRequest {
                     bytes_transferred: 0,
                     total_size: file.size(),
                     file: None,
+                    mime_type: file.mime_type().to_owned(),
                 };
                 total_bytes += info.total_size as u64;
                 self.state.transferred_files.insert(file.payload_id(), info);
@@ -1026,9 +1027,13 @@ impl InboundRequest {
         let directory = std::fs::canonicalize(directory.map(std::path::PathBuf::from).unwrap_or_else(get_download_dir))?;
         if !directory.is_dir() { return Err(anyhow!("Save location must be a directory")); }
         let mut saved_files = Vec::new();
+        let mut saved_names = Vec::new();
+        let mut saved_mime_types = Vec::new();
         for id in ids {
             let mfi = self.state.transferred_files.get_mut(&id).unwrap();
             let name = mfi.file_url.file_name().ok_or_else(|| anyhow!("Missing filename"))?.to_string_lossy().into_owned();
+            saved_names.push(name.clone());
+            saved_mime_types.push(mfi.mime_type.clone());
             let mut created = false;
             for counter in 0..10000 {
                 let dest = directory.join(if counter == 0 { name.clone() } else { format!("{counter}_{name}") });
@@ -1049,6 +1054,8 @@ impl InboundRequest {
         if let Some(meta) = self.state.transfer_metadata.as_mut() {
             meta.destination = Some(directory.to_string_lossy().into_owned());
             meta.saved_files = Some(saved_files);
+            meta.saved_names = Some(saved_names);
+            meta.saved_mime_types = Some(saved_mime_types);
         }
 
         let frame = sharing_nearby::Frame {

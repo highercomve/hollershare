@@ -7,7 +7,7 @@ pub fn build(b: *std.Build) void {
     const target = oriel.resolveTarget(b, b.standardTargetOptions(.{}));
     const optimize = b.standardOptimizeOption(.{});
     const android = target.result.abi == .android;
-    const version = std.mem.trimStart(u8, b.option([]const u8, "app-version", "Package version") orelse b.graph.environ_map.get("GHOSTFILE_VERSION") orelse "0.1.0", "v");
+    const version = std.mem.trimStart(u8, b.option([]const u8, "app-version", "Package version") orelse b.graph.environ_map.get("GHOSTFILE_VERSION") orelse "0.2.0", "v");
     _ = std.SemanticVersion.parse(version) catch @panic("Package version must be semantic version, e.g. 0.1.0");
     // Oriel's built-in modules and plugins. Switch on what the app uses:
     // anything left off is neither compiled nor linked.
@@ -16,7 +16,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .tray = true,
         .menu = false,
-        .store = false,
+        .store = true, // dataDir: where settings.json lives
         .dialog = true,
         .native_ui = b.option(bool, "native_ui", "Use the native renderer") orelse true,
         .notification = true,
@@ -53,7 +53,14 @@ pub fn build(b: *std.Build) void {
             .dev = null,
             .types_path = null,
         },
-        .permissions = .{ .notifications = "Notify you when files arrive" },
+        .permissions = .{
+            .notifications = "Notify you when files arrive",
+            // Quick Share: Bluetooth LE finds and wakes nearby phones (the
+            // "Nearby devices" prompt; location up to Android 11).
+            .bluetooth = "Find nearby phones and computers to share files with",
+            // mDNS discovery on the LAN (Android: the Wi-Fi multicast lock).
+            .local_network = "Find and reach devices on your network to share files with",
+        },
         .package = .{
             .id = "dev.ghostshare.App",
             .name = "GhostShare",
@@ -89,6 +96,15 @@ pub fn build(b: *std.Build) void {
         for ([_][]const u8{ "ws2_32", "userenv", "bcrypt", "ntdll", "iphlpapi", "psapi" }) |library| application.exe.root_module.linkSystemLibrary(library, .{});
     }
     if (target.result.os.tag == .macos) application.exe.root_module.linkFramework("CoreBluetooth", .{});
+    if (android) {
+        // GhostShare's Kotlin (the BLE beacon, src/android_beacon.zig) and AndroidManifest,
+        // copied into the Gradle project that `zig build android-project` writes:
+        const sources = b.addUpdateSourceFiles();
+        sources.addCopyFileToSource(b.path("src/android/QuickShareBeacon.kt"), "android/app/src/main/java/dev/ghostshare/QuickShareBeacon.kt");
+        sources.addCopyFileToSource(b.path("src/android/AndroidManifest.xml"), "android/app/src/main/AndroidManifest.xml");
+        b.getInstallStep().dependOn(&sources.step);
+        if (b.top_level_steps.get("android-dev")) |dev| dev.step.dependOn(&sources.step);
+    }
     const verifier = b.addExecutable(.{
         .name = "verify-updates",
         .root_module = b.createModule(.{
@@ -102,5 +118,12 @@ pub fn build(b: *std.Build) void {
     if (b.args) |args| verify.addArgs(args);
     b.step("verify-updates", "Verify signed release manifests and update payloads").dependOn(&verify.step);
     const tests = b.addSystemCommand(&.{ "cargo", "test", "--locked", "--package", "ghostshare-quickshare" });
-    b.step("test", "Test the Quick Share bridge").dependOn(&tests.step);
+    const test_step = b.step("test", "Test the Quick Share bridge and the settings");
+    test_step.dependOn(&tests.step);
+    const settings_tests = b.addTest(.{ .root_module = b.createModule(.{
+        .root_source_file = b.path("src/settings.zig"),
+        .target = b.graph.host,
+        .optimize = optimize,
+    }) });
+    test_step.dependOn(&b.addRunArtifact(settings_tests).step);
 }

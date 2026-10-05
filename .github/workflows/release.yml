@@ -19,9 +19,8 @@ defaults:
   run:
     working-directory: ghostshare
 env:
-  ORIEL_REF: v0.9.0
-  ZIG_VERSION: 0.16.0
-  GHOSTFILE_VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '0.1.0' }}
+  ORIEL_REF: v0.9.1
+  GHOSTFILE_VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '0.2.0' }}
 jobs:
   framework-ready:
     runs-on: ubuntu-latest
@@ -32,8 +31,7 @@ jobs:
         id: release
         working-directory: ${{ github.workspace }}
         run: |
-          revision=$(git ls-remote https://github.com/highercomve/Oriel.git "refs/tags/$ORIEL_REF")
-          if [ -n "$revision" ]; then
+          if curl --fail --silent --show-error "https://api.github.com/repos/highercomve/Oriel/releases/tags/$ORIEL_REF" > /dev/null; then
             echo "available=true" >> "$GITHUB_OUTPUT"
           else
             echo "available=false" >> "$GITHUB_OUTPUT"
@@ -54,11 +52,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: highercomve/Oriel
-          ref: ${{ env.ORIEL_REF }}
-          path: oriel-ghostshare
-      - uses: mlugg/setup-zig@v2
-        with:
-          version: ${{ env.ZIG_VERSION }}
+          ref: refs/tags/${{ env.ORIEL_REF }}
+          path: oriel
       - run: python scripts/setup-oriel.py
       - name: Package tools
         run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.43.0
@@ -96,11 +91,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: highercomve/Oriel
-          ref: ${{ env.ORIEL_REF }}
-          path: oriel-ghostshare
-      - uses: mlugg/setup-zig@v2
-        with:
-          version: ${{ env.ZIG_VERSION }}
+          ref: refs/tags/${{ env.ORIEL_REF }}
+          path: oriel
       - run: brew install protobuf
       - run: python3 scripts/setup-oriel.py
       - name: Import persistent signing identity
@@ -153,11 +145,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: highercomve/Oriel
-          ref: ${{ env.ORIEL_REF }}
-          path: oriel-ghostshare
-      - uses: mlugg/setup-zig@v2
-        with:
-          version: ${{ env.ZIG_VERSION }}
+          ref: refs/tags/${{ env.ORIEL_REF }}
+          path: oriel
       - name: Dependencies
         run: |
           choco install protoc nsis mingw --no-progress -y
@@ -196,11 +185,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: highercomve/Oriel
-          ref: ${{ env.ORIEL_REF }}
-          path: oriel-ghostshare
-      - uses: mlugg/setup-zig@v2
-        with:
-          version: ${{ env.ZIG_VERSION }}
+          ref: refs/tags/${{ env.ORIEL_REF }}
+          path: oriel
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -263,8 +249,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: highercomve/Oriel
-          ref: ${{ env.ORIEL_REF }}
-          path: oriel-ghostshare
+          ref: refs/tags/${{ env.ORIEL_REF }}
+          path: oriel
       - name: Dependencies
         run: |
           sudo apt-get update
@@ -274,11 +260,9 @@ jobs:
           path: ghostshare/dist
           merge-multiple: true
       - run: python3 scripts/combine-updates.py
-      - uses: mlugg/setup-zig@v2
-        with:
-          version: ${{ env.ZIG_VERSION }}
+      - run: python3 scripts/setup-oriel.py
       - name: Verify every updater signature and payload
-        run: zig build verify-updates -- dist src/update-public-key.txt
+        run: oriel build verify-updates -- dist src/update-public-key.txt
       - uses: actions/upload-artifact@v4
         with:
           name: signed-update-feed
@@ -289,4 +273,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ github.ref_name }}
-        run: gh release create "$RELEASE_TAG" dist/* --verify-tag --generate-notes --title "GhostShare $RELEASE_TAG"
+        run: |
+          python3 scripts/release-notes.py "$RELEASE_TAG" > release-notes.md
+          gh release create "$RELEASE_TAG" dist/* --verify-tag --notes-file release-notes.md --title "GhostShare $RELEASE_TAG"

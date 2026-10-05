@@ -9,7 +9,7 @@ use std::{
     collections::BTreeMap,
     ffi::{CStr, CString},
     os::raw::c_char,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{mpsc as sync_channel, Mutex, OnceLock},
     thread,
     time::Duration,
@@ -69,21 +69,54 @@ enum Request {
         id: String,
     },
     ResolvePath { id: String, index: usize, folder: bool },
+    /// Where new transfers are saved: `directory` empty is the default
+    /// folder; `create` makes it (the default folder) instead of requiring
+    /// an existing, writable one (a folder the user chose).
+    DownloadDir { directory: String, create: bool },
+    /// A finished inbound transfer's files: `[{path, name, mime}]`, with
+    /// the staged path, the sender's name and MIME type ("" when unknown).
+    ReceivedFiles { id: String },
+    /// Where the app moved a transfer's files after it finished (Android:
+    /// into the folder chosen in Settings), shown in snapshots as
+    /// `relocations[id]`. The engine only keeps it.
+    Relocation { id: String, relocation: Value },
     Stop,
 }
 struct Model {
-    name: String,
     download_dir: PathBuf,
     visible: bool,
     peers: BTreeMap<String, EndpointInfo>,
     transfers: Vec<ChannelMessage>,
+    relocations: BTreeMap<String, Value>,
     error: Option<String>,
 }
 impl Model {
     fn snapshot(&self) -> Value {
-        json!({"name":self.name, "download_dir":self.download_dir, "visible":self.visible,
+        json!({"name":rqs_lib::device_name(), "download_dir":self.download_dir, "visible":self.visible,
             "peers":self.peers.values().collect::<Vec<_>>(), "transfers":self.transfers,
-            "error":self.error, "protocol":"Quick Share"})
+            "relocations":self.relocations, "error":self.error, "protocol":"Quick Share"})
+    }
+    /// A restarted phone has a new port and service ID; Android may leave
+    /// its previous announcement cached. Remove unreachable duplicate
+    /// endpoints, keeping distinct receivers that are still listening.
+    async fn prune_duplicate_peers(&mut self) {
+        let candidates: Vec<String> = self.peers.values().filter(|peer| {
+            peer.ip.is_some() && self.peers.values().any(|other| {
+                peer.id != other.id && peer.ip == other.ip && peer.name == other.name
+            })
+        }).map(|peer| peer.id.clone()).collect();
+        let mut probes = tokio::task::JoinSet::new();
+        for id in candidates {
+            probes.spawn(async move {
+                let reachable = matches!(tokio::time::timeout(
+                    Duration::from_millis(750), tokio::net::TcpStream::connect(&id)
+                ).await, Ok(Ok(_)));
+                (!reachable).then_some(id)
+            });
+        }
+        while let Some(result) = probes.join_next().await {
+            if let Ok(Some(id)) = result { self.peers.remove(&id); }
+        }
     }
     fn transfer_event(&mut self, mut event: ChannelMessage) {
         if event.direction != ChannelDirection::LibToFront {
@@ -106,7 +139,8 @@ impl Model {
                     .iter()
                     .position(|t| terminal(t.state.as_ref()))
                 {
-                    self.transfers.remove(index);
+                    let removed = self.transfers.remove(index);
+                    self.relocations.remove(&removed.id);
                 } else {
                     self.error = Some("Too many active transfers".into());
                     return;
@@ -116,6 +150,21 @@ impl Model {
             self.transfers.push(event);
         }
     }
+}
+/// `[{path, name, mime}]` for a received transfer's saved files: names and
+/// MIME types fall back to the saved file's name and "" when the engine
+/// didn't record them.
+fn received_files(transfer: &ChannelMessage) -> Result<Value, String> {
+    let meta = transfer.meta.as_ref().ok_or("File metadata unavailable")?;
+    let saved = meta.saved_files.as_deref().unwrap_or_default();
+    let files = saved.iter().enumerate().map(|(i, path)| {
+        let name = meta.saved_names.as_ref().and_then(|n| n.get(i)).cloned()
+            .or_else(|| Path::new(path).file_name().map(|n| n.to_string_lossy().into_owned()))
+            .unwrap_or_default();
+        let mime = meta.saved_mime_types.as_ref().and_then(|m| m.get(i)).cloned().unwrap_or_default();
+        json!({"path":path, "name":name, "mime":mime})
+    });
+    Ok(Value::Array(files.collect()))
 }
 fn terminal(state: Option<&State>) -> bool {
     matches!(
@@ -244,6 +293,23 @@ async fn handle(
             let path = if folder { path.parent().ok_or("Folder unavailable")?.to_path_buf() } else { path };
             return Ok(json!(std::fs::canonicalize(path).map_err(|e| e.to_string())?));
         }
+        Request::ReceivedFiles { id } => {
+            let transfer = model.transfers.iter().find(|t| t.id == id).ok_or("Transfer not found")?;
+            if transfer.state != Some(State::Finished) || transfer.rtype != Some(TransferType::Inbound) {
+                return Err("Transfer has not completed".into());
+            }
+            return received_files(transfer);
+        }
+        Request::Relocation { id, relocation } => {
+            if !model.transfers.iter().any(|t| t.id == id) { return Err("Transfer not found".into()); }
+            model.relocations.insert(id, relocation);
+        }
+        Request::DownloadDir { directory, create } => {
+            let directory = download_directory(&directory, create)?;
+            rqs.set_download_path(Some(directory.clone()));
+            model.download_dir = directory;
+            return Ok(json!(model.download_dir));
+        }
         Request::Cancel { id } => {
             let transfer = model
                 .transfers
@@ -267,14 +333,11 @@ async fn run(
     directory: PathBuf,
 ) {
     let mut model = Model {
-        name: hostname::get()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .into_owned(),
         download_dir: directory.clone(),
         visible: true,
         peers: BTreeMap::new(),
         transfers: vec![],
+        relocations: BTreeMap::new(),
         error: None,
     };
     let port = std::env::var("GHOSTFILE_PORT")
@@ -297,8 +360,10 @@ async fn run(
         return;
     }
     let _ = ready.send(Ok(()));
+    let mut peer_cleanup = tokio::time::interval(Duration::from_secs(5));
     loop {
         tokio::select! {
+            _ = peer_cleanup.tick() => model.prune_duplicate_peers().await,
             envelope = requests.recv() => {
                 let Some(envelope) = envelope else { break; };
                 if matches!(envelope.request, Request::Stop) {
@@ -342,6 +407,49 @@ fn guarded(f: impl FnOnce() -> Result<Value, String>) -> *mut c_char {
             .unwrap_or_else(|_| Err("Quick Share engine panicked".into())),
     )
 }
+/// Android discards stderr and has no state directory for a log file: the
+/// engine's log goes to logcat instead (`adb logcat -s GhostShare`), with
+/// discovery (`rqs_lib`) at info so that resolved devices show up there.
+#[cfg(target_os = "android")]
+fn setup_logging() {
+    let _ = tracing_subscriber::fmt()
+        .with_ansi(false)
+        .without_time()
+        .with_env_filter(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "warn,rqs_lib=info".into()))
+        .with_writer(|| logcat::Writer::default())
+        .try_init();
+}
+#[cfg(target_os = "android")]
+mod logcat {
+    use std::{ffi::CString, io, os::raw::{c_char, c_int}};
+    #[link(name = "log")]
+    extern "C" {
+        fn __android_log_write(priority: c_int, tag: *const c_char, text: *const c_char) -> c_int;
+    }
+    /// One tracing event's text, written to logcat as one entry when dropped.
+    #[derive(Default)]
+    pub struct Writer(Vec<u8>);
+    impl io::Write for Writer {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            self.0.extend_from_slice(bytes);
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> io::Result<()> { Ok(()) }
+    }
+    impl Drop for Writer {
+        fn drop(&mut self) {
+            let text = String::from_utf8_lossy(&self.0);
+            let text = text.trim_end();
+            if text.is_empty() { return; }
+            // android/log.h: INFO 4, WARN 5, ERROR 6.
+            let level = text.split_whitespace().next().unwrap_or("");
+            let priority = match level { "ERROR" => 6, "WARN" => 5, _ => 4 };
+            let Ok(text) = CString::new(text.replace('\0', " ")) else { return; };
+            unsafe { __android_log_write(priority, c"GhostShare".as_ptr(), text.as_ptr()); }
+        }
+    }
+}
+#[cfg(not(target_os = "android"))]
 fn setup_logging() {
     let writer: Box<dyn std::io::Write + Send> = (|| -> std::io::Result<_> {
         let dirs = directories::ProjectDirs::from("dev", "ghostshare", "GhostShare")
@@ -367,6 +475,18 @@ fn setup_logging() {
         .with_writer(Mutex::new(writer))
         .try_init();
 }
+/// The name nearby devices see (the platform's device name, from Oriel),
+/// before `ghostshare_start`. Null or empty: the host name. Input must be a
+/// NUL-terminated string owned by the caller (invalid UTF-8 is replaced).
+#[no_mangle]
+pub unsafe extern "C" fn ghostshare_set_device_name(name: *const c_char) {
+    let name = if name.is_null() {
+        None
+    } else {
+        Some(CStr::from_ptr(name).to_string_lossy().into_owned())
+    };
+    rqs_lib::set_device_name(name);
+}
 /// Input must be a valid NUL-terminated UTF-8 string owned by the caller.
 #[no_mangle]
 pub unsafe extern "C" fn ghostshare_start(directory: *const c_char) -> *mut c_char {
@@ -378,18 +498,7 @@ pub unsafe extern "C" fn ghostshare_start(directory: *const c_char) -> *mut c_ch
         let text = CStr::from_ptr(directory)
             .to_str()
             .map_err(|e| e.to_string())?;
-        let directory = if text.is_empty() && std::env::var_os("GHOSTFILE_DOWNLOAD_DIR").is_some() {
-            PathBuf::from(std::env::var_os("GHOSTFILE_DOWNLOAD_DIR").unwrap())
-        } else if text.is_empty() {
-            let dirs = directories::UserDirs::new().ok_or("Could not locate home directory")?;
-            dirs.download_dir()
-                .unwrap_or(dirs.home_dir())
-                .join("GhostShare")
-        } else {
-            PathBuf::from(text)
-        };
-        std::fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
-        let directory = std::fs::canonicalize(directory).map_err(|e| e.to_string())?;
+        let directory = download_directory(text, true)?;
         let mut engine = ENGINE
             .get_or_init(|| Mutex::new(None))
             .lock()
@@ -454,6 +563,46 @@ pub unsafe extern "C" fn ghostshare_request(request: *const c_char) -> *mut c_ch
             .map_err(|e| e.to_string())?
     })
 }
+/// The desktop default download folder: `GHOSTFILE_DOWNLOAD_DIR`, else
+/// `~/Downloads/GhostShare`.
+fn default_directory() -> Result<PathBuf, String> {
+    if let Some(directory) = std::env::var_os("GHOSTFILE_DOWNLOAD_DIR") {
+        return Ok(PathBuf::from(directory));
+    }
+    let dirs = directories::UserDirs::new().ok_or("Could not locate home directory")?;
+    Ok(dirs.download_dir().unwrap_or(dirs.home_dir()).join("GhostShare"))
+}
+/// Fails unless a file can be created in `directory`.
+fn check_writable(directory: &Path) -> Result<(), String> {
+    let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos();
+    let probe = directory.join(format!(".ghostshare-write-test-{}-{nanos}", std::process::id()));
+    std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&probe)
+        .map_err(|_| "GhostShare can't write to this folder".to_string())?;
+    let _ = std::fs::remove_file(&probe);
+    Ok(())
+}
+/// Where received files go, canonical: `text` empty is `default_directory`.
+/// With `create`, the folder is made if missing (default folders); without,
+/// it must already exist (a folder the user chose). Either way it must be a
+/// writable directory.
+fn download_directory(text: &str, create: bool) -> Result<PathBuf, String> {
+    let directory = if text.trim().is_empty() { default_directory()? } else { PathBuf::from(text) };
+    if !directory.is_absolute() {
+        return Err("Use a full folder path".into());
+    }
+    if create {
+        std::fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
+    }
+    let directory = std::fs::canonicalize(&directory).map_err(|_| "This folder doesn't exist".to_string())?;
+    if !directory.is_dir() {
+        return Err("Choose a folder, not a file".into());
+    }
+    check_writable(&directory)?;
+    Ok(directory)
+}
 #[no_mangle]
 pub extern "C" fn ghostshare_stop() {
     let Some(lock) = ENGINE.get() else {
@@ -482,6 +631,36 @@ pub unsafe extern "C" fn ghostshare_free(pointer: *mut c_char) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[tokio::test]
+    async fn removes_stale_phone_ports_and_preserves_live_receivers() {
+        let live = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let another_live = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let stopped = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let old_address = stopped.local_addr().unwrap();
+        drop(stopped);
+        let make_peer = |address: std::net::SocketAddr| EndpointInfo {
+            id: address.to_string(),
+            ip: Some(address.ip().to_string()),
+            port: Some(address.port().to_string()),
+            name: Some("Poco x3".into()),
+            present: Some(true),
+            ..Default::default()
+        };
+        let live_id = live.local_addr().unwrap().to_string();
+        let another_id = another_live.local_addr().unwrap().to_string();
+        let peers = [make_peer(live.local_addr().unwrap()),
+            make_peer(another_live.local_addr().unwrap()), make_peer(old_address)];
+        let mut model = Model {
+            download_dir: PathBuf::new(), visible: true,
+            peers: peers.into_iter().map(|peer| (peer.id.clone(), peer)).collect(),
+            transfers: vec![], relocations: BTreeMap::new(), error: None,
+        };
+        model.prune_duplicate_peers().await;
+        assert_eq!(model.peers.len(), 2);
+        assert!(model.peers.contains_key(&live_id));
+        assert!(model.peers.contains_key(&another_id));
+        assert!(!model.peers.contains_key(&old_address.to_string()));
+    }
     #[test]
     fn rejects_non_files_and_empty_batches() {
         assert!(validate_paths(&[]).is_err());
@@ -491,11 +670,11 @@ mod tests {
     #[test]
     fn preserves_pin_and_metadata_when_state_only_event_arrives() {
         let mut model = Model {
-            name: "test".into(),
             download_dir: PathBuf::new(),
             visible: true,
             peers: BTreeMap::new(),
             transfers: vec![],
+            relocations: BTreeMap::new(),
             error: None,
         };
         let mut event: ChannelMessage = serde_json::from_value(json!({"id":"1", "direction":"LibToFront",
@@ -515,5 +694,79 @@ mod tests {
             Some("1234")
         );
         assert_eq!(model.transfers[0].rtype, Some(TransferType::Inbound));
+    }
+    #[test]
+    fn received_files_pair_paths_with_names_and_types() {
+        let transfer = |meta: Value| -> ChannelMessage { serde_json::from_value(json!({"id":"1", "direction":"LibToFront", "meta":meta})).unwrap() };
+        let full = transfer(json!({"id":"1", "total_bytes":0, "ack_bytes":0,
+            "saved_files":["/r/photo.jpg", "/r/1_notes"], "saved_names":["photo.jpg", "notes"], "saved_mime_types":["image/jpeg", ""]}));
+        assert_eq!(received_files(&full).unwrap(), json!([
+            {"path":"/r/photo.jpg", "name":"photo.jpg", "mime":"image/jpeg"},
+            {"path":"/r/1_notes", "name":"notes", "mime":""},
+        ]));
+        // Without names (an older engine's metadata): the saved file's name.
+        let bare = transfer(json!({"id":"1", "total_bytes":0, "ack_bytes":0, "saved_files":["/r/a.txt"]}));
+        assert_eq!(received_files(&bare).unwrap(), json!([{"path":"/r/a.txt", "name":"a.txt", "mime":""}]));
+    }
+    fn scratch(name: &str) -> PathBuf {
+        let path = std::env::temp_dir().join(format!("ghostshare-test-{}-{name}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&path);
+        path
+    }
+    #[test]
+    fn chosen_download_folder_must_exist() {
+        let path = scratch("missing");
+        assert!(download_directory(path.to_str().unwrap(), false).is_err());
+        assert!(!path.exists());
+        std::fs::create_dir_all(&path).unwrap();
+        assert_eq!(download_directory(path.to_str().unwrap(), false).unwrap(), std::fs::canonicalize(&path).unwrap());
+        // No probe file left behind.
+        assert_eq!(std::fs::read_dir(&path).unwrap().count(), 0);
+        std::fs::remove_dir_all(&path).unwrap();
+    }
+    #[test]
+    fn default_download_folder_is_created() {
+        let path = scratch("default").join("Received");
+        assert_eq!(download_directory(path.to_str().unwrap(), true).unwrap(), std::fs::canonicalize(&path).unwrap());
+        std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
+    }
+    #[test]
+    fn download_folder_rejects_files_and_relative_paths() {
+        let path = scratch("file");
+        std::fs::create_dir_all(&path).unwrap();
+        let file = path.join("a.txt");
+        std::fs::write(&file, b"x").unwrap();
+        assert!(download_directory(file.to_str().unwrap(), false).is_err());
+        assert!(download_directory("relative/folder", false).is_err());
+        std::fs::remove_dir_all(&path).unwrap();
+    }
+    #[cfg(unix)]
+    #[test]
+    fn download_folder_must_be_writable() {
+        use std::os::unix::fs::PermissionsExt;
+        let path = scratch("readonly");
+        std::fs::create_dir_all(&path).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o555)).unwrap();
+        // Root can write anywhere: only check where permissions apply.
+        if std::fs::write(path.join("probe"), b"").is_err() {
+            assert!(download_directory(path.to_str().unwrap(), false).is_err());
+        }
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::fs::remove_dir_all(&path).unwrap();
+    }
+    #[test]
+    fn device_name_changes_notify_and_show_in_snapshots() {
+        let mut changes = rqs_lib::subscribe_device_name();
+        changes.mark_unchanged();
+        rqs_lib::set_device_name(Some("  Desk  ".into()));
+        assert!(changes.has_changed().unwrap());
+        changes.mark_unchanged();
+        // The same name again is not a change.
+        rqs_lib::set_device_name(Some("Desk".into()));
+        assert!(!changes.has_changed().unwrap());
+        let model = Model { download_dir: PathBuf::new(), visible: true, peers: BTreeMap::new(), transfers: vec![], relocations: BTreeMap::new(), error: None };
+        assert_eq!(model.snapshot()["name"], "Desk");
+        rqs_lib::set_device_name(None);
+        assert!(changes.has_changed().unwrap());
     }
 }

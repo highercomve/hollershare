@@ -1,6 +1,6 @@
 [package]
 name = "ghostshare-quickshare"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "GPL-3.0-only"
 
@@ -14,7 +14,6 @@ serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros"] }
 
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-hostname = "0.4"
 directories = "6"
 
 [features]

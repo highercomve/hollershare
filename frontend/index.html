@@ -1,18 +1,22 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>GhostShare</title><link rel="stylesheet" href="style.css"></head>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="color-scheme" content="light dark"><title>GhostShare</title><link rel="stylesheet" href="style.css"></head>
 <body>
 <div class="app">
 <header>
-  <div class="brand"><svg width="40" height="40" viewBox="0 0 80 80" fill="none" aria-hidden="true"><path fill="#d95e43" d="M12 67V36a28 28 0 0 1 56 0v31l-9-6-9 6-10-6-10 6-9-6-9 6Z"/>
+  <div class="brand"><svg width="40" height="40" viewBox="0 0 80 80" fill="none" aria-hidden="true"><path fill="currentColor" d="M12 67V36a28 28 0 0 1 56 0v31l-9-6-9 6-10-6-10 6-9-6-9 6Z"/>
 <circle cx="30" cy="33" r="3.8" fill="#fff7ed"/>
 <circle cx="49" cy="33" r="3.8" fill="#fff7ed"/>
 <path d="M27 51h29m-9-9 9 9-9 9" fill="none" stroke="#fff7ed" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/></svg><span>GhostShare</span></div>
-  <button id="visibility" class="presence" aria-label="Toggle device visibility">Starting Quick Share…</button>
+  <div class="header-actions"><button id="visibility" class="presence" aria-label="Toggle device visibility">Starting Quick Share…</button><button id="settings-open" class="gear" aria-label="Settings" aria-expanded="false" title="Settings">⚙</button></div>
 </header>
 <main>
 <div class="intro"><div><p class="eyebrow">A LITTLE CLOSER. A LOT EASIER.</p><h1>From here<br>to over there.</h1><p class="lede">Share files and text with computers and Android.<br>Same network. No accounts. Just Quick Share.</p></div><div class="connection-art" aria-hidden="true"><div class="orbit"><span class="orbit-center">↗</span></div><span class="art-caption">GOOD THINGS TRAVEL.</span></div></div>
 <div id="error" class="notice error" role="alert" hidden></div>
+<section id="settings" class="panel settings" aria-labelledby="settings-title" hidden><div class="section-top"><h2 id="settings-title">Settings <span>How others see you, where files land</span></h2><button id="settings-close" class="text-button">Close</button></div>
+<div class="setting"><label for="device-name">Device name</label><input id="device-name" autocomplete="off" spellcheck="false" aria-describedby="device-name-help device-name-error"><p id="device-name-help" class="small">The name nearby devices see. Leave it empty to use this device’s name.</p><p id="device-name-error" class="field-error" role="alert" hidden></p></div>
+<div class="setting"><label id="download-label">Save received files to</label><div class="manual-row"><div id="download-current" class="path folder" role="group" aria-labelledby="download-label" aria-describedby="download-help download-dir-error"><span id="download-name" class="folder-name"></span><span id="download-detail" class="folder-detail"></span></div><button id="download-browse" class="secondary">Choose…</button></div><p id="download-help" class="small"><span id="download-help-text">New transfers are saved here.</span> <button id="download-default" class="text-button">Use default folder</button></p><p id="download-dir-error" class="field-error" role="alert" hidden></p></div>
+<div class="request-actions"><button id="settings-save" class="primary">Save <span>✓</span></button><button id="settings-reset" class="secondary">Reset to defaults</button><span id="settings-status" class="small" role="status"></span></div></section>
 <div id="requests"></div>
 <div class="workspace">
 <section class="panel files-panel"><div class="section-top"><h2>01 <span>Choose what to share</span></h2><button id="clear" class="text-button" hidden>Clear</button></div>

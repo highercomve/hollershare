@@ -14,6 +14,8 @@ pub struct InternalFileInfo {
     pub bytes_transferred: i64,
     pub total_size: i64,
     pub file: Option<File>,
+    /// Inbound: the MIME type the sender gave (empty when it gave none).
+    pub mime_type: String,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize, TS)]
@@ -26,6 +28,11 @@ pub struct TransferMetadata {
     pub destination: Option<String>,
     pub files: Option<Vec<String>>,
     pub saved_files: Option<Vec<String>>,
+    /// Inbound, parallel to `saved_files`: each file's name as the sender
+    /// gave it (a saved file may be "1_name" after a clash) and the MIME
+    /// type it gave (empty when none).
+    pub saved_names: Option<Vec<String>>,
+    pub saved_mime_types: Option<Vec<String>>,
 
     pub text_type: Option<TextPayloadType>,
     pub text_description: Option<String>,

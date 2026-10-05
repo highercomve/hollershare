@@ -7,14 +7,14 @@ A native Oriel desktop app for sharing files over your local network with other 
 For a fresh checkout, put the development framework beside this repository:
 
 ```sh
-git clone --branch v0.9.0 https://github.com/highercomve/Oriel.git ../oriel-ghostshare
+git clone --branch v0.9.1 https://github.com/highercomve/Oriel.git ../oriel
 ```
 
-Requirements: Zig 0.16, Rust/Cargo, `protoc`, GTK4 development libraries and D-Bus development libraries on Linux. GhostShare uses the Oriel checkout at `../oriel-ghostshare`. CI checks out the official `v0.9.0` release alongside GhostShare and builds its CLI from source.
+Requirements: Rust/Cargo, `protoc`, GTK4 development libraries and D-Bus development libraries on Linux. GhostShare uses the Oriel checkout at `../oriel`. CI checks out the official `v0.9.1` release alongside GhostShare and downloads its CLI from the matching GitHub release, verifying SHA256SUMS. Oriel installs the required Zig version automatically.
 
 ```sh
 python3 scripts/setup-oriel.py
-../oriel-ghostshare/zig-out/bin/oriel build -Dnative_ui
+.oriel-cli/oriel-release-bin/oriel build -Dnative_ui
 ./zig-out/bin/ghostshare
 ```
 
@@ -66,7 +66,7 @@ CLI commands bind ephemeral ports and run with receiver visibility disabled duri
 3. Select a nearby device and click Send.
 4. Compare the confirmation PIN on both devices and accept on the receiver.
 
-Received files go to `Downloads/GhostShare` (or `GhostShare` inside the home directory if no Downloads directory is configured). Incoming files need approval. Choose **Accept to default** or **Choose folder…** for each request. Completed Activity entries provide **Open file** and **Open folder**, using the actual saved filename. Existing files are preserved using numbered names. Partial files still owned by a failed or cancelled transfer are removed.
+Received files go to `Downloads/GhostShare` (or `GhostShare` inside the home directory if no Downloads directory is configured). To use another folder, open Settings (⚙) and pick one with **Choose…**, the system's folder picker; **Use default folder** goes back. Incoming files need approval. Choose **Accept to default** or **Choose folder…** for each request. Completed Activity entries provide **Open file** and **Open folder**, using the actual saved filename. Existing files are preserved using numbered names. Partial files still owned by a failed or cancelled transfer are removed.
 
 Visibility controls whether this computer advertises itself to nearby devices. Hiding does not block an already-known direct address or end an active transfer. The manual address field accepts a Quick Share destination’s IP and port, for example `192.168.1.20:54321`.
 
@@ -76,7 +76,7 @@ GhostShare uses the real Nearby Share / Quick Share LAN protocol through RQuickS
 
 This implementation uses a shared local network. Wi-Fi Direct, hotspot creation, cloud transfers, Google contacts/account visibility and Wi-Fi credential sharing are not implemented. Plain text, links and files are supported.
 
-Verified on Linux: native rendering and file selection, live Android discovery, and encrypted multi-file loopback transfers. The user has also received files from a physical Pixel 8. Windows, macOS and Android app builds are being checked by CI; device testing is still required. Android app builds currently use app-specific external storage and LAN discovery without Bluetooth. Linux-specific folder selection and file opening are currently implemented; these controls on other platforms are not yet available.
+Verified on Linux: native rendering and file selection, live Android discovery, and encrypted multi-file loopback transfers. The user has also received files from a physical Pixel 8. Windows, macOS and Android app builds are being checked by CI; device testing is still required. On Android, received files arrive in the app's own folder (`Android/data/dev.ghostshare.App/files/Received`); a folder chosen in Settings with **Choose…** (Android's folder picker, with access that lasts across restarts) receives each finished transfer, moved there by GhostShare. If that access is revoked, files stay in the app's folder and Settings asks for a folder again. GhostShare can't open received files on Android: open them from the Files app. The Android app holds a Wi-Fi multicast lock while it runs, without which Android drops the mDNS answers discovery relies on, and advertises the Quick Share BLE wake-up beacon (service 0xFE2C) once the Nearby devices permission is granted and Bluetooth is on, so nearby phones start announcing themselves; without it, an Android phone appears only while it is already advertising on the network (its Quick Share receiving screen open, visible to everyone). Other computers running GhostShare always advertise. The app announces the device name from Settings > About phone. The engine logs to logcat: `adb logcat -s Oriel GhostShare`. Folders are chosen with the system's picker on every desktop and on Android; opening received files is implemented on Linux only.
 
 ## Appearance and background receiving
 

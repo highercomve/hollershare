@@ -1,17 +1,29 @@
+#[cfg(not(target_os = "android"))]
 use std::sync::{Arc, Mutex};
+#[cfg(not(target_os = "android"))]
 use std::time::Duration;
 
+#[cfg(not(target_os = "android"))]
 use mdns_sd::{AddrType, ServiceDaemon, ServiceInfo};
 use serde::{Deserialize, Serialize};
+#[cfg(not(target_os = "android"))]
 use tokio::sync::broadcast::Receiver;
+#[cfg(not(target_os = "android"))]
 use tokio::sync::watch;
+#[cfg(not(target_os = "android"))]
 use tokio::time::{interval_at, Instant};
+#[cfg(not(target_os = "android"))]
 use tokio_util::sync::CancellationToken;
 use ts_rs::TS;
 
-use crate::utils::{gen_mdns_endpoint_info, gen_mdns_name, DeviceType};
+#[cfg(not(target_os = "android"))]
+use crate::utils::{
+    device_name, gen_mdns_endpoint_info, gen_mdns_name, subscribe_device_name, DeviceType,
+};
 
+#[cfg(not(target_os = "android"))]
 const INNER_NAME: &str = "MDnsServer";
+#[cfg(not(target_os = "android"))]
 const TICK_INTERVAL: Duration = Duration::from_secs(60);
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]
@@ -34,14 +46,18 @@ impl Visibility {
     }
 }
 
+#[cfg(not(target_os = "android"))]
 pub struct MDnsServer {
     daemon: ServiceDaemon,
+    endpoint_id: [u8; 4],
+    service_port: u16,
     service_info: ServiceInfo,
     ble_receiver: Receiver<()>,
     visibility_sender: Arc<Mutex<watch::Sender<Visibility>>>,
     visibility_receiver: watch::Receiver<Visibility>,
 }
 
+#[cfg(not(target_os = "android"))]
 impl MDnsServer {
     pub fn new(
         endpoint_id: [u8; 4],
@@ -54,6 +70,8 @@ impl MDnsServer {
 
         Ok(Self {
             daemon: ServiceDaemon::new()?,
+            endpoint_id,
+            service_port,
             service_info,
             ble_receiver,
             visibility_sender,
@@ -67,6 +85,8 @@ impl MDnsServer {
         let ble_receiver = &mut self.ble_receiver;
         let mut visibility = *self.visibility_receiver.borrow();
         let mut interval = interval_at(Instant::now() + TICK_INTERVAL, TICK_INTERVAL);
+        let mut name_changes = subscribe_device_name();
+        name_changes.mark_unchanged();
 
         loop {
             tokio::select! {
@@ -80,6 +100,20 @@ impl MDnsServer {
                         Err(err) => return Err(err.into()),
                     }
                 },
+                Ok(()) = name_changes.changed() => {
+                    // The name is in the TXT record: withdraw the service
+                    // (goodbye packets, so browsers drop the old name) and
+                    // announce it again with the new one.
+                    name_changes.mark_unchanged();
+                    let service_info = Self::build_service(self.endpoint_id, self.service_port, DeviceType::Laptop)?;
+                    if visibility != Visibility::Invisible {
+                        if let Ok(receiver) = self.daemon.unregister(self.service_info.get_fullname()) {
+                            let _ = receiver.recv_timeout(Duration::from_secs(1));
+                        }
+                        self.daemon.register(service_info.clone())?;
+                    }
+                    self.service_info = service_info;
+                }
                 _ = self.visibility_receiver.changed() => {
                     visibility = *self.visibility_receiver.borrow_and_update();
 
@@ -140,9 +174,12 @@ impl MDnsServer {
         device_type: DeviceType,
     ) -> Result<ServiceInfo, anyhow::Error> {
         let name = gen_mdns_name(endpoint_id);
-        let hostname = hostname::get()?.to_string_lossy().into_owned();
-        info!("Broadcasting with: {hostname}");
-        let endpoint_info = gen_mdns_endpoint_info(device_type as u8, &hostname);
+        // The mDNS host name stays the system's; the name phones show is
+        // the device name in the endpoint info.
+        let hostname = mdns_hostname(&hostname::get()?.to_string_lossy());
+        let device_name = device_name();
+        info!("Broadcasting as: {device_name} (host {hostname})");
+        let endpoint_info = gen_mdns_endpoint_info(device_type as u8, &device_name);
 
         let properties = [("n", endpoint_info)];
         let si = ServiceInfo::new(
@@ -156,5 +193,30 @@ impl MDnsServer {
         .enable_addr_auto(AddrType::V4);
 
         Ok(si)
+    }
+}
+
+// Android's resolver needs a fully qualified mDNS host, rather than a bare
+// system hostname such as "ridge" (or Android's shared "localhost").
+#[cfg(not(target_os = "android"))]
+fn mdns_hostname(hostname: &str) -> String {
+    let hostname = hostname.trim_end_matches('.');
+    if hostname.to_ascii_lowercase().ends_with(".local") {
+        format!("{hostname}.")
+    } else {
+        format!("{hostname}.local.")
+    }
+}
+
+#[cfg(all(test, not(target_os = "android")))]
+mod hostname_tests {
+    use super::mdns_hostname;
+
+    #[test]
+    fn announces_fully_qualified_local_hostname() {
+        assert_eq!(mdns_hostname("ridge"), "ridge.local.");
+        assert_eq!(mdns_hostname("ridge.local"), "ridge.local.");
+        assert_eq!(mdns_hostname("ridge.local."), "ridge.local.");
+        assert_eq!(mdns_hostname("ridge.LOCAL."), "ridge.LOCAL.");
     }
 }

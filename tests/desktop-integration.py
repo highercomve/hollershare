@@ -118,7 +118,7 @@ def main():
             time.sleep(.5)
             command("import", "-window", "root", "artifacts/system-light.png")
             from PIL import Image
-            assert Image.open("artifacts/system-dark.png").getpixel((20, 100)) == (32, 35, 31)
+            assert Image.open("artifacts/system-dark.png").getpixel((20, 100)) == (26, 23, 20)
             assert Image.open("artifacts/system-light.png").getpixel((20, 100)) == (245, 241, 233)
             close_window(window)
             pump(lambda: not visible())

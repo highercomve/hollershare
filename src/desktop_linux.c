@@ -144,31 +144,6 @@ int ghostshare_open_path(const char *path) {
     gboolean result = g_app_info_launch_default_for_uri(uri, NULL, NULL);
     g_free(uri); return result;
 }
-typedef struct { GMutex mutex; GCond condition; gboolean done; gchar *path; } FolderCall;
-static void folder_finished(GObject *source, GAsyncResult *result, gpointer data) {
-    FolderCall *call = data;
-    GFile *file = gtk_file_dialog_select_folder_finish(GTK_FILE_DIALOG(source), result, NULL);
-    g_mutex_lock(&call->mutex);
-    if (file) { call->path = g_file_get_path(file); g_object_unref(file); }
-    call->done = TRUE; g_cond_signal(&call->condition); g_mutex_unlock(&call->mutex);
-}
-static gboolean folder_start(gpointer data) {
-    GtkFileDialog *dialog = gtk_file_dialog_new();
-    gtk_file_dialog_set_title(dialog, "Save incoming files in…");
-    gtk_file_dialog_select_folder(dialog, parent, NULL, folder_finished, data);
-    g_object_unref(dialog); return G_SOURCE_REMOVE;
-}
-char *ghostshare_select_folder(void) {
-    FolderCall call = {0};
-    g_mutex_init(&call.mutex); g_cond_init(&call.condition);
-    g_mutex_lock(&call.mutex);
-    g_idle_add_full(G_PRIORITY_DEFAULT, folder_start, &call, NULL);
-    while (!call.done) g_cond_wait(&call.condition, &call.mutex);
-    g_mutex_unlock(&call.mutex);
-    g_mutex_clear(&call.mutex); g_cond_clear(&call.condition);
-    return call.path;
-}
-void ghostshare_desktop_free(void *pointer) { g_free(pointer); }
 static gboolean quit_idle(gpointer data) {
     (void)data;
     ghostshare_quit_requested();

@@ -21,6 +21,10 @@ pub use inbound::*;
 pub(crate) mod info;
 mod mdns_discovery;
 pub use mdns_discovery::*;
+#[cfg(any(target_os = "android", test))]
+mod android_mdns;
+#[cfg(target_os = "android")]
+pub use android_mdns::MDnsServer;
 mod mdns;
 pub use mdns::*;
 mod outbound;
