@@ -4,7 +4,7 @@ Notable changes in HollerShare releases.
 
 ## Unreleased
 
-- Simplified the megaphone logo for small launcher sizes, with a full green
+- Replaced the megaphone with the Relay H logo for small launcher sizes, with a full green
   background and Android adaptive and themed icons. Updated the desktop,
   tray, header and README artwork to match.
 

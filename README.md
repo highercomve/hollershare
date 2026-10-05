@@ -131,7 +131,7 @@ Signing material is supplied only to trusted tag or explicitly signed manual bui
 
 ## Logo
 
-A bold megaphone and an outgoing coral arrow, drawn with simple shapes that stay readable at launcher size. Scalable SVG sources and launcher/tray PNGs are in [`assets/brand`](assets/brand/README.md). Android uses a full green adaptive icon with a monochrome variant for themed launchers. The header uses a raster mark that swaps palettes with the theme.
+The Relay H connects two upright device shapes with a coral bridge and endpoints, drawn with bold shapes that stay readable at launcher size. Scalable SVG sources and launcher/tray PNGs are in [`assets/brand`](assets/brand/README.md). Android uses a full green adaptive icon with a monochrome variant for themed launchers. The header uses a raster mark that swaps palettes with the theme.
 
 ## Updates
 

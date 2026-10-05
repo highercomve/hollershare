@@ -1,7 +1,7 @@
 # HollerShare logo
 
-A solid megaphone and one outgoing arrow. Broad silhouettes and two simple
-paths keep the mark readable at 24–48 pixels. The launcher uses a deep green
+The Relay H joins two upright device shapes with a coral bridge and two
+coral endpoints. Broad silhouettes keep the mark readable at 24–48 pixels. The launcher uses a deep green
 background (`#234b3a`), a warm white horn (`#fff7ea`) and a coral arrow
 (`#ff957d`).
 
