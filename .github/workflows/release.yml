@@ -22,7 +22,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: build-${{ github.ref }}
+  group: build-${{ github.ref }}-${{ inputs.platform || 'all' }}
   cancel-in-progress: false
 defaults:
   run:
