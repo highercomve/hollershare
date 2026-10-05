@@ -10,6 +10,10 @@ on:
         description: Verify signing and update manifests without publishing
         type: boolean
         default: false
+      publish:
+        description: Publish signed packages to the current version's release (requires sign)
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -268,11 +272,16 @@ jobs:
           name: signed-update-feed
           path: hollershare/dist/latest.json
       - name: Publish release packages
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.sign && inputs.publish)
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('v{0}', env.HOLLERSHARE_VERSION) }}
         run: |
           python3 scripts/release-notes.py "$RELEASE_TAG" > release-notes.md
-          gh release create "$RELEASE_TAG" dist/* --verify-tag --notes-file release-notes.md --title "HollerShare $RELEASE_TAG"
+          if gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" dist/* --clobber
+            gh release edit "$RELEASE_TAG" --notes-file release-notes.md --title "HollerShare ${RELEASE_TAG#v}" --latest
+          else
+            gh release create "$RELEASE_TAG" dist/* --verify-tag --notes-file release-notes.md --title "HollerShare ${RELEASE_TAG#v}"
+          fi

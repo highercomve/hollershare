@@ -109,6 +109,10 @@ Linux follows the desktop appearance setting (XDG Settings portal, GNOME setting
 
 [GitHub Actions](https://github.com/highercomve/hollershare/actions) builds Oriel packages for Linux x86_64 (.deb/.rpm/AppImage), macOS arm64 (.dmg), Windows x86_64 (NSIS), and Android arm64/x86_64 (APK/AAB). Pushes to main and pull requests build without signing secrets. A `v*` tag signs Windows/macOS/Android packages and publishes a GitHub release only after every platform succeeds. A manual workflow with `sign=true` verifies signed builds without publishing.
 
+For release recovery, a manual run with both `sign=true` and `publish=true`
+publishes the version configured in the workflow. Existing releases receive
+the verified assets and updated notes; their tag is preserved.
+
 CI uses the same pinned framework release as `build.zig.zon`. Its separate
 Oriel checkout supplies the checksum-verified release CLI for packaging and
 signing; application dependencies are still fetched by Zig. The
