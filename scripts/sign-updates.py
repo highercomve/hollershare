@@ -29,4 +29,4 @@ with tempfile.TemporaryDirectory(prefix="ghostshare-update-") as temporary:
     for target, format_name, artifact in payloads:
         if not artifact.is_file(): raise SystemExit("Missing update payload: " + str(artifact))
         url = f"https://github.com/highercomve/ghostshare/releases/download/{tag}/{artifact.name}"
-        subprocess.run(["zig", "build", "sign-update", "--", str(artifact), "--app-id", "dev.ghostshare.App", "--version", version, "--url", url, "--key", str(key), "--target", target, "--format", format_name, "--out", str(root / ("update-" + target + ".json"))], check=True)
+        subprocess.run(["oriel", "build", "sign-update", "--", str(artifact), "--app-id", "dev.ghostshare.App", "--version", version, "--url", url, "--key", str(key), "--target", target, "--format", format_name, "--out", str(root / ("update-" + target + ".json"))], check=True)
