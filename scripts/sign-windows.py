@@ -42,12 +42,12 @@ payload = re.search(r'^!define BINARY_SRC\s+"([^"]+)"', text, re.M)
 installer = re.search(r'^!define OUT_FILE\s+"([^"]+)"', text, re.M)
 if not payload or not installer:
     raise SystemExit("Could not resolve app and installer from Oriel's NSIS script")
-with tempfile.TemporaryDirectory(prefix="ghostshare-sign-", dir=os.environ["RUNNER_TEMP"]) as temporary:
+with tempfile.TemporaryDirectory(prefix="hollershare-sign-", dir=os.environ["RUNNER_TEMP"]) as temporary:
     certificate = Path(temporary) / "codesign.pfx"
     certificate.write_bytes(base64.b64decode(os.environ["ORIEL_WINDOWS_CERT_P12_BASE64"], validate=True))
     # Trust on LocalMachine (avoids modal confirmation dialog on Windows headless runner)
-    ps = "$c=[System.Security.Cryptography.X509Certificates.X509Certificate2]::new($env:GHOSTFILE_CERT,$env:ORIEL_WINDOWS_CERT_PASSWORD); $s=[System.Security.Cryptography.X509Certificates.X509Store]::new('Root','LocalMachine'); $s.Open('ReadWrite'); $s.Add([System.Security.Cryptography.X509Certificates.X509Certificate2]::new($c.RawData)); $s.Close()"
-    subprocess.run(["pwsh", "-NoProfile", "-Command", ps], env=dict(os.environ, GHOSTFILE_CERT=str(certificate)), check=True)
+    ps = "$c=[System.Security.Cryptography.X509Certificates.X509Certificate2]::new($env:HOLLERSHARE_CERT,$env:ORIEL_WINDOWS_CERT_PASSWORD); $s=[System.Security.Cryptography.X509Certificates.X509Store]::new('Root','LocalMachine'); $s.Open('ReadWrite'); $s.Add([System.Security.Cryptography.X509Certificates.X509Certificate2]::new($c.RawData)); $s.Close()"
+    subprocess.run(["pwsh", "-NoProfile", "-Command", ps], env=dict(os.environ, HOLLERSHARE_CERT=str(certificate)), check=True)
     timestamp_urls = [
         "http://timestamp.digicert.com",
         "http://timestamp.sectigo.com",
@@ -65,7 +65,7 @@ with tempfile.TemporaryDirectory(prefix="ghostshare-sign-", dir=os.environ["RUNN
     binary = Path(payload.group(1).replace("$$", "$"))
     sign(binary)
     Path("zig-out/bin").mkdir(parents=True, exist_ok=True)
-    shutil.copy2(binary, "zig-out/bin/ghostshare.exe")
+    shutil.copy2(binary, "zig-out/bin/hollershare.exe")
     subprocess.run([makensis, "/NOCD", "/WX", str(script.resolve())], check=True)
     setup = Path(installer.group(1).replace("$$", "$"))
     sign(setup)

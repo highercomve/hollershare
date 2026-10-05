@@ -1,12 +1,12 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const oriel = @import("oriel");
-const config = @import("ghostshare_config");
+const config = @import("hollershare_config");
 const android = builtin.abi == .android;
 const target = if (android) @tagName(builtin.cpu.arch) ++ "-android" else oriel.updater.DEFAULT_TARGET;
 const base: oriel.updater.Config = .{
-    .app_id = "dev.ghostshare.App",
-    .manifest_url = "https://github.com/highercomve/ghostshare/releases/latest/download/latest.json",
+    .app_id = "dev.hollershare.App",
+    .manifest_url = "https://github.com/highercomve/hollershare/releases/latest/download/latest.json",
     .current_version = config.version,
     .public_key_b64 = std.mem.trim(u8, @embedFile("update-public-key.txt"), " \r\n"),
     .target = target,

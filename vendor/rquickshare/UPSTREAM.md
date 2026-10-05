@@ -4,7 +4,7 @@ Source: https://github.com/Martichou/rquickshare
 Revision: 378d8ae969941bee4bf60ad34ac9cf8bb7005eb7 (0.11.5)
 License: GPL-3.0, see LICENSE.
 
-GhostShare modifications:
+HollerShare modifications:
 
 - Reject unsafe incoming filenames, negative/oversized sizes and duplicate payload IDs.
 - Create received files exclusively; preserve collisions both on disk and within a batch.
@@ -23,7 +23,7 @@ GhostShare modifications:
 
 Original schemas and copyright headers are retained. Regression coverage lives in the library tests and ../../tests/quickshare_loopback.py.
 
-Additional GhostShare integration patches: per-transfer save directories, atomic
+Additional HollerShare integration patches: per-transfer save directories, atomic
 collision-safe file creation at acceptance, actual saved path metadata, portable
 seek/write and file-length APIs, and hostname lookup without sys_metrics.
 

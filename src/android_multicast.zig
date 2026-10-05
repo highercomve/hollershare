@@ -3,7 +3,7 @@ const oriel = @import("oriel");
 const jni = oriel.android.jni;
 const android_beacon = @import("android_beacon.zig");
 
-const log = std.log.scoped(.ghostshare);
+const log = std.log.scoped(.hollershare);
 
 /// A global reference to the held `WifiManager.MulticastLock` (fallback JNI path).
 var held: jni.jobject = null;
@@ -94,7 +94,7 @@ fn acquireIn(env: *jni.Env) !void {
     const wifi_manager = f.FindClass(env, "android/net/wifi/WifiManager") orelse return error.NoWifiManagerClass;
     defer f.DeleteLocalRef(env, wifi_manager);
     const create_lock = f.GetMethodID(env, wifi_manager, "createMulticastLock", "(Ljava/lang/String;)Landroid/net/wifi/WifiManager$MulticastLock;") orelse return error.NoCreateMulticastLock;
-    const tag = newString(env, "GhostShare mDNS") orelse return error.OutOfMemory;
+    const tag = newString(env, "HollerShare mDNS") orelse return error.OutOfMemory;
     defer f.DeleteLocalRef(env, tag);
     const lock = f.CallObjectMethodA(env, wifi, create_lock, &[_]jni.jvalue{.{ .l = tag }});
     if (env.clearException() or lock == null) return error.CreateMulticastLockFailed;

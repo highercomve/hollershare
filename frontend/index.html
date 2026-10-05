@@ -1,13 +1,10 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="color-scheme" content="light dark"><title>GhostShare</title><link rel="stylesheet" href="style.css"></head>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="color-scheme" content="light dark"><title>HollerShare</title><link rel="stylesheet" href="style.css"></head>
 <body>
 <div class="app">
 <header>
-  <div class="brand"><svg width="40" height="40" viewBox="0 0 80 80" fill="none" aria-hidden="true"><path fill="currentColor" d="M12 67V36a28 28 0 0 1 56 0v31l-9-6-9 6-10-6-10 6-9-6-9 6Z"/>
-<circle cx="30" cy="33" r="3.8" fill="#fff7ed"/>
-<circle cx="49" cy="33" r="3.8" fill="#fff7ed"/>
-<path d="M27 51h29m-9-9 9 9-9 9" fill="none" stroke="#fff7ed" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/></svg><span>GhostShare</span></div>
+    <div class="brand"><img id="brand-mark-img" src="brand-mark.png" width="40" height="34" alt="" aria-hidden="true"><span>HollerShare</span></div>
   <div class="header-actions"><button id="visibility" class="presence" aria-label="Toggle device visibility">Starting Quick Share…</button><button id="settings-open" class="gear" aria-label="Settings" aria-expanded="false" title="Settings">⚙</button></div>
 </header>
 <main>
@@ -23,15 +20,15 @@
 <div class="share-modes"><button id="mode-files" class="secondary" aria-pressed="true">Files</button><button id="mode-text" class="text-button" aria-pressed="false">Clipboard text</button></div>
 <div id="text-compose" hidden><label for="clipboard-text">Text to share</label><textarea id="clipboard-text" rows="5" placeholder="Paste or type text to send" aria-label="Text to share"></textarea><button id="read-clipboard" class="secondary">Paste clipboard</button><p class="caption">Review your text, then choose a device. Up to 1 MB.</p></div>
 <div id="file-compose"><div id="file-list"></div>
-<div id="file-empty" class="file-empty"><div class="file-symbol">＋</div><h3>A small file. A big idea.</h3><p>Pick something to send, then choose<br>where it should go.</p></div>
+<div id="file-empty" class="file-empty"><div class="file-symbol">＋</div><h3>A small file. A big idea.</h3><p>Drop files on this card, or pick something to send,<br>then choose where it should go.</p></div>
 <button id="choose" class="primary">Choose files <span>＋</span></button><p class="caption">Add files one at a time. Send them together.</p></div></section>
 <section class="panel devices-panel"><div class="section-top"><h2>02 <span>Choose a device</span></h2><span id="peer-count" class="count">0</span></div>
 <div id="peers"></div>
-<div id="peer-empty" class="peer-empty"><div class="search-mark">◎</div><h3>Looking around…</h3><p>Open GhostShare on your other computer, or open Quick Share on Android and turn on receiving.</p><p class="small">Keep both devices on the same Wi-Fi network. Bluetooth helps Android discovery.</p></div>
+<div id="peer-empty" class="peer-empty"><div class="search-mark">◎</div><h3>Looking around…</h3><p>Open HollerShare on your other computer, or open Quick Share on Android and turn on receiving.</p><p class="small">Keep both devices on the same Wi-Fi network. Bluetooth helps Android discovery.</p></div>
 <div class="manual"><label for="address">Have an address?</label><div class="manual-row"><input id="address" placeholder="192.168.1.20:54321" aria-label="Device IP address and port"><button id="manual-send" class="secondary" disabled>Send ↗</button></div><p class="small">The destination must speak Quick Share.</p></div></section>
 </div>
 <section class="activity"><div class="section-top"><h2>Activity</h2><span class="small">Direct, encrypted transfers</span></div><div id="transfers"><p class="activity-empty">Your files’ next adventure starts here.</p></div></section>
-<p class="background-note small">Close the window to keep receiving. Use the tray to send files or reopen GhostShare. <button id="quit" class="text-button">Quit GhostShare</button></p>
+<p class="background-note small">Close the window to keep receiving. Use the tray to send files or reopen HollerShare. <button id="quit" class="text-button">Quit HollerShare</button></p>
 </main>
 <div class="update-bar"><span id="update-status" role="status">Checking for updates…</span><button id="update-check" class="text-button">Check for updates</button><button id="update-install" class="secondary" hidden>Install update</button><button id="update-restart" class="secondary" hidden>Restart now</button></div>
 <footer><span id="identity">Connecting…</span><span id="downloads">Received files stay on this computer.</span></footer>

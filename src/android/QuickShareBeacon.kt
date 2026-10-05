@@ -1,7 +1,7 @@
-// GhostShare's own Android source: build.zig copies it into the generated
-// Gradle project (android/app/src/main/java/dev/ghostshare/) on every
+// HollerShare's own Android source: build.zig copies it into the generated
+// Gradle project (android/app/src/main/java/dev/hollershare/) on every
 // Android build, since Oriel 0.9.1 has no way to add app sources.
-package dev.ghostshare
+package dev.hollershare
 
 import android.Manifest
 import android.bluetooth.BluetoothAdapter
@@ -36,7 +36,7 @@ import dev.oriel.OrielRuntime
  */
 @Keep
 object QuickShareBeacon {
-    private const val TAG = "GhostShare"
+    private const val TAG = "HollerShare"
     private val SERVICE_UUID: ParcelUuid = ParcelUuid.fromString("0000FE2C-0000-1000-8000-00805F9B34FB")
     // vendor/rquickshare/src/hdl/blea.rs SERVICE_DATA.
     private val SERVICE_DATA: ByteArray = intArrayOf(
@@ -115,7 +115,7 @@ object QuickShareBeacon {
         if (multicastLock != null && multicastLock?.isHeld == true) return
         try {
             val wifi = OrielRuntime.app.getSystemService(Context.WIFI_SERVICE) as? WifiManager
-            multicastLock = wifi?.createMulticastLock("GhostShare mDNS")?.apply {
+            multicastLock = wifi?.createMulticastLock("HollerShare mDNS")?.apply {
                 setReferenceCounted(false)
                 acquire()
                 Log.i(TAG, "Quick Share: Wi-Fi MulticastLock acquired")

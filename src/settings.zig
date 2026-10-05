@@ -1,4 +1,4 @@
-//! GhostShare's settings: the name nearby devices see and the folder
+//! HollerShare's settings: the name nearby devices see and the folder
 //! received files go to, kept as JSON (`settings.json`) in the app's data
 //! directory. An empty (or missing) value means the default: the system's
 //! device name, and the platform's default download folder.
@@ -97,7 +97,7 @@ pub fn normalizeName(name: []const u8) NameError![]const u8 {
 pub fn nameErrorMessage(err: NameError) []const u8 {
     return switch (err) {
         error.NameTooLong => "Use a shorter name (up to 64 characters)",
-        error.NameNotUtf8 => "The name has characters GhostShare can't use",
+        error.NameNotUtf8 => "The name has characters HollerShare can't use",
         error.NameHasControlCharacters => "The name can't contain control characters",
     };
 }

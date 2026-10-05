@@ -1,6 +1,6 @@
 const $ = id => document.getElementById(id);
 let files = [], model = null, sending = false, polling = false, share_mode = "files";
-// Android: received files land in GhostShare's folder, then move to the
+// Android: received files land in HollerShare's folder, then move to the
 // folder chosen in Settings (model.relocations); opening them is left to
 // the Files app.
 let platform_android = false, settings = null;
@@ -41,7 +41,7 @@ function element(tag, className, text) {
 function clear(node) { node.innerHTML = ""; }
 function error(message) { $("error").textContent = String(message); $("error").hidden = false; }
 async function call(command, args) {
-  if (!window.oriel) throw new Error("Open GhostShare as a desktop app to share files.");
+  if (!window.oriel) throw new Error("Open HollerShare as a desktop app to share files.");
   const response = await window.oriel.invoke(command, args || null);
   if (typeof response !== "string") return response;
   const result = JSON.parse(response);
@@ -176,24 +176,24 @@ function render_transfers() {
   }
 }
 // Android: where a finished transfer's files are. Opening them needs the
-// Files app: GhostShare can't hand them to another app.
+// Files app: HollerShare can't hand them to another app.
 function render_relocation(detail, transfer) {
   const moved = (model.relocations || {})[transfer.id];
   const files_app = " · Open them from your Files app";
-  if (!moved) { detail.appendChild(element("div", "small", "Saved in GhostShare’s folder" + files_app)); return; }
+  if (!moved) { detail.appendChild(element("div", "small", "Saved in HollerShare’s folder" + files_app)); return; }
   const names = moved.names || [];
   if (moved.state === "moving") detail.appendChild(element("div", "small", "Moving to " + moved.folder + "…"));
   else if (moved.state === "moved") detail.appendChild(element("div", "small", "Saved to " + moved.folder + (names.length === 1 ? " as " + names[0] : "") + files_app));
   else {
     const kept = moved.kept || 0;
-    detail.appendChild(element("div", "small", (names.length ? names.length + " saved to " + moved.folder + ", " : "") + kept + (kept === 1 ? " file stays" : " files stay") + " in GhostShare’s folder" + files_app));
+    detail.appendChild(element("div", "small", (names.length ? names.length + " saved to " + moved.folder + ", " : "") + kept + (kept === 1 ? " file stays" : " files stay") + " in HollerShare’s folder" + files_app));
   }
   if (moved.error) detail.appendChild(element("div", "small relocation-error", moved.error));
 }
 // Where received files go, for the request card and the footer.
 function folder_label() {
   if (platform_android && settings && settings.download_folder) return settings.download_folder_name + (settings.folder_available ? "" : " (unavailable)");
-  if (platform_android) return "GhostShare’s folder";
+  if (platform_android) return "HollerShare’s folder";
   return model ? model.download_dir : "";
 }
 let previous_peers = "", previous_transfers = "";
@@ -226,6 +226,56 @@ async function choose_files() {
   } catch (err) { error(err.message || err); }
   finally { $("choose").disabled = false; }
 }
+
+// Drag and drop onto the "Choose what to share" card (Oriel's
+// docs/drag-and-drop-design.md): a dropped File carries an opaque handle
+// that resolves to where the file lives, the same way a picked file arrives
+// with a path. Text drops open the clipboard composer instead.
+const drop_panel = document.querySelector(".files-panel");
+let drop_depth = 0;
+// Protected mode (enter, over): only `types` is readable — "Files" marks a
+// file drag, and the drop event itself brings the data.
+function drag_taken(event) {
+  const types = event.dataTransfer ? Array.from(event.dataTransfer.types || []) : [];
+  return types.includes("Files") || types.includes("text/plain");
+}
+function dropped_of(event) {
+  const transfer = event.dataTransfer;
+  if (!transfer) return null;
+  const list = Array.from(transfer.files || []);
+  if (list.length) return { files: list, text: null };
+  if (types_has_text(transfer)) return { files: [], text: transfer.getData("text/plain") };
+  return null;
+}
+function types_has_text(transfer) { return Array.from(transfer.types || []).includes("text/plain"); }
+function drop_leave() { drop_depth = Math.max(0, drop_depth - 1); if (!drop_depth) drop_panel.classList.remove("drop-hover"); }
+async function drop_received(event) {
+  const dropped = dropped_of(event);
+  if (!dropped) return;
+  event.preventDefault();
+  drop_depth = 0; drop_panel.classList.remove("drop-hover");
+  if (!dropped.files.length) {
+    set_share_mode("text"); $("clipboard-text").value = dropped.text; render_files(); render_peers();
+    return;
+  }
+  const added = [], lost = [];
+  for (const file of dropped.files) {
+    try {
+      const path = await window.oriel.drop.path(file);
+      if (!path) { lost.push(file.name || "a file"); continue; }
+      if (!files.some(f => f.path === path)) added.push({ path, name:file.name || path.split("/").pop(), size:file.size || 0 });
+    } catch (_) { lost.push(file.name || "a file"); }
+  }
+  if (added.length) { set_share_mode("files"); files.push(...added); $("error").hidden = true; }
+  if (lost.length) error(lost.length === dropped.files.length ? "These files can't be shared from where they came from." : added.length ? lost.length + " of the dropped files can't be shared from where they came from." : "The dropped file can't be shared from where it came from.");
+  render_files(); render_peers();
+}
+if (drop_panel && window.oriel) {
+  drop_panel.addEventListener("dragenter", event => { if (drag_taken(event)) { event.preventDefault(); drop_depth++; drop_panel.classList.add("drop-hover"); } });
+  drop_panel.addEventListener("dragover", event => { if (drag_taken(event)) event.preventDefault(); });
+  drop_panel.addEventListener("dragleave", drop_leave);
+  drop_panel.addEventListener("drop", drop_received);
+}
 $("mode-files").addEventListener("click", () => set_share_mode("files"));
 $("mode-text").addEventListener("click", () => set_share_mode("text"));
 $("read-clipboard").addEventListener("click", paste_clipboard);
@@ -243,8 +293,33 @@ $("visibility").addEventListener("click", async () => {
 });
 render_files(); poll(); setInterval(poll, 800);
 
+function apply_share_payload(payload) {
+  if (!payload) return;
+  if (typeof payload === "string") {
+    try { payload = JSON.parse(payload); } catch (e) { return; }
+  }
+  if (payload.mode === "text") {
+    set_share_mode("text");
+    $("clipboard-text").value = payload.text || "";
+    render_files();
+    render_peers();
+  } else if (payload.mode === "files" && Array.isArray(payload.files) && payload.files.length) {
+    set_share_mode("files");
+    for (const f of payload.files) {
+      if (!files.some(existing => existing.path === f.path)) {
+        files.push(f);
+      }
+    }
+    render_files();
+    render_peers();
+  }
+}
 let theme_event_received = false;
-function set_theme(dark) { document.documentElement.setAttribute("data-theme", dark ? "dark" : "light"); }
+function set_theme(dark) {
+  document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+  const mark = $("brand-mark-img");
+  if (mark) mark.src = dark ? "brand-mark-dark.png" : "brand-mark.png";
+}
 if (window.oriel) {
   call("system_info").then(info => {
     platform_android = !!info.android;
@@ -252,6 +327,8 @@ if (window.oriel) {
     previous_transfers = ""; return poll();
   }).catch(err => error(err.message || err));
   window.oriel.listen("system_theme", info => { theme_event_received = true; if (typeof info.dark === "boolean") set_theme(info.dark); });
+  call("get_pending_share").then(apply_share_payload).catch(() => {});
+  window.oriel.listen("share_target", apply_share_payload);
   window.oriel.listen("tray_send", () => { set_share_mode("files"); choose_files(); });
   window.oriel.listen("tray_clipboard", paste_clipboard);
   window.oriel.listen("tray_visibility", () => poll());
@@ -286,9 +363,9 @@ function render_settings() {
 function render_folder() {
   if (!settings) return;
   const chosen = settings.download_folder.length > 0;
-  $("download-name").textContent = chosen ? (settings.download_folder_name || settings.download_folder) : (platform_android ? "GhostShare’s folder" : "Default folder");
+  $("download-name").textContent = chosen ? (settings.download_folder_name || settings.download_folder) : (platform_android ? "HollerShare’s folder" : "Default folder");
   let detail;
-  if (chosen && !settings.folder_available) detail = "Unavailable · GhostShare can’t save here any more. Choose the folder again, or use the default folder.";
+  if (chosen && !settings.folder_available) detail = "Unavailable · HollerShare can’t save here any more. Choose the folder again, or use the default folder.";
   else if (chosen) detail = settings.android ? "Finished transfers move here" : settings.download_folder;
   else detail = model ? model.download_dir : "";
   $("download-detail").textContent = detail;
@@ -297,7 +374,7 @@ function render_folder() {
   $("download-browse").hidden = !settings.folder_picker;
   $("download-default").hidden = !chosen;
   $("download-help-text").textContent = settings.android
-    ? (chosen ? "GhostShare receives into its own folder, then moves each finished transfer here." : "Received files stay in GhostShare’s own folder. Choose a folder to move them somewhere you can find them.")
+    ? (chosen ? "HollerShare receives into its own folder, then moves each finished transfer here." : "Received files stay in HollerShare’s own folder. Choose a folder to move them somewhere you can find them.")
     : "New transfers are saved here.";
   if (model) $("downloads").textContent = "Save to " + folder_label();
 }
@@ -338,7 +415,7 @@ async function change_folder(choose) {
     const before = settings && settings.download_folder;
     settings = await call("settings_folder", { choose });
     await poll(); render_folder(); if (model) { previous_transfers = ""; render_transfers(); }
-    if (settings.download_folder !== before) $("settings-status").textContent = "Saved · Received files go to " + (settings.download_folder ? settings.download_folder_name : (platform_android ? "GhostShare’s folder" : "the default folder"));
+    if (settings.download_folder !== before) $("settings-status").textContent = "Saved · Received files go to " + (settings.download_folder ? settings.download_folder_name : (platform_android ? "HollerShare’s folder" : "the default folder"));
   } catch (err) { field_error("download-dir-error", err.message || err); }
   finally { settings_busy = false; settings_disabled(false); }
 }
@@ -359,7 +436,7 @@ async function check_updates() {
   try {
     const info = await call("update_info"); update_android = info.android; update_version = info.version;
     const update = await call("updater_check");
-    $("update-status").textContent = update.available ? "GhostShare " + update.version + " is available" : "GhostShare " + update_version + " · Up to date";
+    $("update-status").textContent = update.available ? "HollerShare " + update.version + " is available" : "HollerShare " + update_version + " · Up to date";
     $("update-install").hidden = !update.available;
     $("update-install").textContent = update_android ? "Download APK" : "Install update";
   } catch (err) { $("update-status").textContent = "Updates unavailable · Try again later"; }
@@ -369,7 +446,7 @@ function active_transfers() { return model && (model.transfers || []).some(t => 
 $("update-check").addEventListener("click", check_updates);
 $("update-install").addEventListener("click", async () => {
   if (update_busy) return;
-  if (update_android) { await window.oriel.openExternal("https://github.com/highercomve/ghostshare/releases/latest"); return; }
+  if (update_android) { await window.oriel.openExternal("https://github.com/highercomve/hollershare/releases/latest"); return; }
   if (active_transfers()) { $("update-status").textContent = "Finish or cancel your transfers before updating"; return; }
   update_busy = true; $("update-install").disabled = true; $("update-check").disabled = true;
   try {

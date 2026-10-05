@@ -1,5 +1,5 @@
 /* The palette. Light by default; dark when the system is (prefers-color-scheme), unless
-   data-theme pins one (app.js sets it from the desktop setting where GhostShare can read it).
+   data-theme pins one (app.js sets it from the desktop setting where HollerShare can read it).
    Both dark blocks hold the same values: change them together. */
 :root { color-scheme:light dark; --paper:#f5f1e9; --ink:#292e28; --muted:#71756c; --line:#dedfd3; --accent:#d95e43; --accent-hover:#c74f36; --on-accent:#fffaf4; --green:#45624b; --green-solid:#45624b; --on-green:#fffaf4; --panel:#fcfaf5; --tint:#e6ebdf; --off:#e6e1d8; --request:#edf0e4; --request-line:#b8c7a5; --error-bg:#f4dfd5; --error-ink:#93462f; --focus:#a5b894; --file-line:#ddc0ae; background:var(--paper); }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme:dark; --paper:#1a1714; --ink:#f1eadf; --muted:#aaa194; --line:#3b342c; --accent:#f07a5a; --accent-hover:#f5937a; --on-accent:#1c120e; --green:#aec79f; --green-solid:#46654c; --on-green:#f6f1e7; --panel:#24201b; --tint:#2b3327; --off:#2f2a24; --request:#252c22; --request-line:#56704b; --error-bg:#41261f; --error-ink:#ffbca3; --focus:#9db58c; --file-line:#5c4335; } }
@@ -14,7 +14,7 @@ button:focus-visible,input:focus-visible { outline:3px solid var(--focus); outli
 [hidden] { display:none !important; }
 .app { max-width:1120px; margin:0 auto; }
 header { display:flex; align-items:center; justify-content:space-between; padding:22px 38px; border-bottom:1px solid var(--line); }
-.brand svg { color:var(--accent); }
+.brand img { display:block; }
 .brand { display:flex; align-items:center; gap:10px; font-size:23px; font-weight:700; letter-spacing:-1px; }
 .presence { color:var(--green); background:var(--tint); padding:10px 15px; border-radius:24px; font-size:12px; }
 .presence.off { background:var(--off); color:var(--muted); }
@@ -87,6 +87,12 @@ footer { padding:15px 38px; border-top:1px solid var(--line); color:var(--muted)
 
 .share-modes { display:flex; gap:8px; margin:0 0 18px; }
 #text-compose label { display:block; margin-bottom:8px; font-weight:600; }
+
+/* Dropping files on the "Choose what to share" card adds them; text opens the
+   clipboard composer. The coral dashed line answers the drag. */
+.files-panel.drop-hover { outline:2px dashed var(--accent); outline-offset:-6px; }
+.files-panel.drop-hover .file-symbol { background:var(--accent); color:var(--on-accent); border-color:var(--accent); }
+.files-panel.drop-hover .file-empty h3 { color:var(--accent); }
 #clipboard-text { width:100%; min-height:130px; padding:12px; margin-bottom:12px; border:1px solid var(--line); border-radius:8px; background:transparent; color:inherit; font:inherit; resize:vertical; }
 .text-preview { white-space:pre-wrap; overflow-wrap:anywhere; max-height:180px; overflow:auto; margin:8px 0; }
 

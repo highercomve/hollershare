@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80" role="img" aria-label="GhostShare">
-<title>GhostShare — a friendly ghost passing a file onward</title>
-<path fill="#d95e43" d="M12 67V36a28 28 0 0 1 56 0v31l-9-6-9 6-10-6-10 6-9-6-9 6Z"/>
-<circle cx="30" cy="33" r="3.8" fill="#fff7ed"/>
-<circle cx="49" cy="33" r="3.8" fill="#fff7ed"/>
-<path d="M27 51h29m-9-9 9 9-9 9" fill="none" stroke="#fff7ed" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>

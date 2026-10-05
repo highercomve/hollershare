@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Build and install GhostShare for the current Linux user, without sudo.
+# Build and install HollerShare for the current Linux user, without sudo.
 set -euo pipefail
 
 usage() {
     printf 'Usage: %s [--skip-build] [-D<zig build option>...]\n' "$0"
+    printf 'Environment: ORIEL_FORK=/path/to/oriel builds against that checkout (requires an Oriel CLI with --fork support).\n'
 }
 
 skip_build=false
@@ -25,46 +26,59 @@ fi
 project_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 cd -- "$project_dir"
 if ! "$skip_build"; then
-    # The app's dependency points at the local Oriel checkout. Build directly
-    # with Zig so an older CLI on PATH cannot select an outdated build flow.
-    zig build -Doptimize=ReleaseSafe -Dnative_ui "${build_flags[@]}"
+    if [[ -n ${ORIEL_FORK:-} ]]; then
+        fork_dir=$(cd -- "$ORIEL_FORK" && pwd)
+        if [[ ! -f "$fork_dir/build.zig" || ! -f "$fork_dir/build.zig.zon" ]]; then
+            printf 'ORIEL_FORK must point to an Oriel checkout with build.zig and build.zig.zon.\n' >&2
+            exit 1
+        fi
+        # Match GhostPen: let Oriel select the dependency and its Zig version,
+        # rather than changing the project's build.zig.zon.
+        if ! command -v oriel >/dev/null 2>&1; then
+            printf 'ORIEL_FORK requires an Oriel CLI with --fork support. Update the Oriel CLI and retry.\n' >&2
+            exit 1
+        fi
+        oriel build --fork="$fork_dir" -Doptimize=ReleaseSafe -Dnative_ui "${build_flags[@]}"
+    else
+        zig build -Doptimize=ReleaseSafe -Dnative_ui "${build_flags[@]}"
+    fi
 fi
 
-source_binary="$project_dir/zig-out/bin/ghostshare"
-if [[ ! -x "$source_binary" || ! -f "$project_dir/assets/brand/ghostshare-icon.png" ]]; then
-    printf 'Missing GhostShare binary or icon. Run this script without --skip-build.\n' >&2
+source_binary="$project_dir/zig-out/bin/hollershare"
+if [[ ! -x "$source_binary" || ! -f "$project_dir/assets/brand/hollershare-icon.png" ]]; then
+    printf 'Missing HollerShare binary or icon. Run this script without --skip-build.\n' >&2
     exit 1
 fi
 
-app_id=dev.ghostshare.App
+app_id=dev.hollershare.App
 bin_dir="$HOME/.local/bin"
 data_dir="${XDG_DATA_HOME:-$HOME/.local/share}"
 desktop_dir="$data_dir/applications"
 icon_root="$data_dir/icons/hicolor"
-installed_binary="$bin_dir/ghostshare"
+installed_binary="$bin_dir/hollershare"
 desktop_file="$desktop_dir/$app_id.desktop"
 case "$installed_binary$data_dir" in
     *$'\n'*|*$'\r'*) printf 'Installation paths must not contain line breaks.\n' >&2; exit 1 ;;
 esac
 
 mkdir -p -- "$bin_dir" "$desktop_dir"
-staging_dir=$(mktemp -d "$bin_dir/.ghostshare-install.XXXXXX")
+staging_dir=$(mktemp -d "$bin_dir/.hollershare-install.XXXXXX")
 trap 'rm -rf -- "$staging_dir"' EXIT
-install -m 755 -- "$source_binary" "$staging_dir/ghostshare"
+install -m 755 -- "$source_binary" "$staging_dir/hollershare"
 
 # Launcher icons for every standard hicolor size, rendered from the SVG so
 # small sizes stay sharp. Falls back to the shipped 1024px PNG alone.
-if command -v rsvg-convert >/dev/null 2>&1 && [[ -f "$project_dir/assets/brand/ghostshare-icon.svg" ]]; then
+if command -v rsvg-convert >/dev/null 2>&1 && [[ -f "$project_dir/assets/brand/hollershare-icon.svg" ]]; then
     for size in 16 24 32 48 64 128 256 512 1024; do
         mkdir -p -- "$staging_dir/icons/${size}x${size}"
-        rsvg-convert -w "$size" -h "$size" "$project_dir/assets/brand/ghostshare-icon.svg" \
+        rsvg-convert -w "$size" -h "$size" "$project_dir/assets/brand/hollershare-icon.svg" \
             -o "$staging_dir/icons/${size}x${size}/$app_id.png" || exit 1
     done
     mkdir -p -- "$staging_dir/icons/scalable"
-    install -m 644 -- "$project_dir/assets/brand/ghostshare-icon.svg" "$staging_dir/icons/scalable/$app_id.svg"
+    install -m 644 -- "$project_dir/assets/brand/hollershare-icon.svg" "$staging_dir/icons/scalable/$app_id.svg"
 else
     mkdir -p -- "$staging_dir/icons/1024x1024"
-    install -m 644 -- "$project_dir/assets/brand/ghostshare-icon.png" "$staging_dir/icons/1024x1024/$app_id.png"
+    install -m 644 -- "$project_dir/assets/brand/hollershare-icon.png" "$staging_dir/icons/1024x1024/$app_id.png"
 fi
 
 # Escape the Exec argument, then the desktop-entry string. Percent signs
@@ -80,7 +94,7 @@ cat > "$staging_dir/$app_id.desktop" <<EOF
 [Desktop Entry]
 Version=1.0
 Type=Application
-Name=GhostShare
+Name=HollerShare
 GenericName=Local File Sharing
 Comment=Share files with computers and Android Quick Share
 Exec="$exec_path"
@@ -98,7 +112,7 @@ if command -v desktop-file-validate >/dev/null 2>&1; then
     desktop-file-validate "$staging_dir/$app_id.desktop"
 fi
 # Renaming the staged binary also permits updating a running installation.
-mv -f -- "$staging_dir/ghostshare" "$installed_binary"
+mv -f -- "$staging_dir/hollershare" "$installed_binary"
 for staged_icon_dir in "$staging_dir"/icons/*/; do
     size=${staged_icon_dir##*/icons/}
     icon_dir="$icon_root/${size%/}/apps"
@@ -109,8 +123,10 @@ mv -f -- "$staging_dir/$app_id.desktop" "$desktop_file"
 
 # Replace launchers from the previous application name. Downloaded files
 # and the user's configuration are preserved.
-rm -f -- "$desktop_dir/dev.ghostfile.App.desktop" "$bin_dir/ghostfile"
-find "$icon_root" -name 'dev.ghostfile.App.*' -delete 2>/dev/null || true
+for previous_name in ghostshare ghostfile; do
+    rm -f -- "$desktop_dir/dev.$previous_name.App.desktop" "$bin_dir/$previous_name"
+    find "$icon_root" -name "dev.$previous_name.App.*" -delete 2>/dev/null || true
+done
 
 if command -v update-desktop-database >/dev/null 2>&1; then
     update-desktop-database "$desktop_dir" || printf 'Could not refresh the desktop database.\n' >&2
@@ -125,4 +141,4 @@ if command -v gtk-update-icon-cache >/dev/null 2>&1 && [[ -d "$icon_root" ]]; th
 fi
 
 printf 'Installed %s\nDesktop launcher: %s\n' "$installed_binary" "$desktop_file"
-printf 'Open GhostShare from your application menu or run %s\n' "$installed_binary"
+printf 'Open HollerShare from your application menu or run %s\n' "$installed_binary"

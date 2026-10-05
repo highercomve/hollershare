@@ -19,7 +19,7 @@ use tokio::sync::{broadcast, mpsc};
 type EventCallback = unsafe extern "C" fn(*const c_char);
 static EVENT_CALLBACK: Mutex<Option<EventCallback>> = Mutex::new(None);
 #[no_mangle]
-pub extern "C" fn ghostshare_set_event_callback(callback: Option<EventCallback>) {
+pub extern "C" fn hollershare_set_event_callback(callback: Option<EventCallback>) {
     if let Ok(mut current) = EVENT_CALLBACK.lock() { *current = callback; }
 }
 fn notify_transfer(event: &ChannelMessage) {
@@ -340,7 +340,7 @@ async fn run(
         relocations: BTreeMap::new(),
         error: None,
     };
-    let port = std::env::var("GHOSTFILE_PORT")
+    let port = std::env::var("HOLLERSHARE_PORT")
         .ok()
         .and_then(|p| p.parse::<u16>().ok())
         .map(u32::from);
@@ -408,7 +408,7 @@ fn guarded(f: impl FnOnce() -> Result<Value, String>) -> *mut c_char {
     )
 }
 /// Android discards stderr and has no state directory for a log file: the
-/// engine's log goes to logcat instead (`adb logcat -s GhostShare`), with
+/// engine's log goes to logcat instead (`adb logcat -s HollerShare`), with
 /// discovery (`rqs_lib`) at info so that resolved devices show up there.
 #[cfg(target_os = "android")]
 fn setup_logging() {
@@ -445,14 +445,14 @@ mod logcat {
             let level = text.split_whitespace().next().unwrap_or("");
             let priority = match level { "ERROR" => 6, "WARN" => 5, _ => 4 };
             let Ok(text) = CString::new(text.replace('\0', " ")) else { return; };
-            unsafe { __android_log_write(priority, c"GhostShare".as_ptr(), text.as_ptr()); }
+            unsafe { __android_log_write(priority, c"HollerShare".as_ptr(), text.as_ptr()); }
         }
     }
 }
 #[cfg(not(target_os = "android"))]
 fn setup_logging() {
     let writer: Box<dyn std::io::Write + Send> = (|| -> std::io::Result<_> {
-        let dirs = directories::ProjectDirs::from("dev", "ghostshare", "GhostShare")
+        let dirs = directories::ProjectDirs::from("dev", "hollershare", "HollerShare")
             .ok_or_else(|| std::io::Error::other("No application state directory"))?;
         let folder = dirs.state_dir().unwrap_or(dirs.data_local_dir());
         std::fs::create_dir_all(folder)?;
@@ -476,10 +476,10 @@ fn setup_logging() {
         .try_init();
 }
 /// The name nearby devices see (the platform's device name, from Oriel),
-/// before `ghostshare_start`. Null or empty: the host name. Input must be a
+/// before `hollershare_start`. Null or empty: the host name. Input must be a
 /// NUL-terminated string owned by the caller (invalid UTF-8 is replaced).
 #[no_mangle]
-pub unsafe extern "C" fn ghostshare_set_device_name(name: *const c_char) {
+pub unsafe extern "C" fn hollershare_set_device_name(name: *const c_char) {
     let name = if name.is_null() {
         None
     } else {
@@ -489,7 +489,7 @@ pub unsafe extern "C" fn ghostshare_set_device_name(name: *const c_char) {
 }
 /// Input must be a valid NUL-terminated UTF-8 string owned by the caller.
 #[no_mangle]
-pub unsafe extern "C" fn ghostshare_start(directory: *const c_char) -> *mut c_char {
+pub unsafe extern "C" fn hollershare_start(directory: *const c_char) -> *mut c_char {
     guarded(|| {
         setup_logging();
         if directory.is_null() {
@@ -514,7 +514,7 @@ pub unsafe extern "C" fn ghostshare_start(directory: *const c_char) -> *mut c_ch
         let (tx, rx) = mpsc::channel(32);
         let (ready_tx, ready_rx) = sync_channel::channel();
         let thread = thread::Builder::new()
-            .name("ghostshare-quickshare".into())
+            .name("hollershare-quickshare".into())
             .spawn(move || {
                 runtime.block_on(run(rx, ready_tx, directory));
                 runtime.shutdown_timeout(Duration::from_secs(1));
@@ -539,7 +539,7 @@ pub unsafe extern "C" fn ghostshare_start(directory: *const c_char) -> *mut c_ch
     })
 }
 #[no_mangle]
-pub unsafe extern "C" fn ghostshare_request(request: *const c_char) -> *mut c_char {
+pub unsafe extern "C" fn hollershare_request(request: *const c_char) -> *mut c_char {
     guarded(|| {
         if request.is_null() {
             return Err("Missing request".into());
@@ -547,7 +547,7 @@ pub unsafe extern "C" fn ghostshare_request(request: *const c_char) -> *mut c_ch
         let request: Request = serde_json::from_slice(CStr::from_ptr(request).to_bytes())
             .map_err(|e| e.to_string())?;
         if matches!(request, Request::Stop) {
-            return Err("Use ghostshare_stop".into());
+            return Err("Use hollershare_stop".into());
         }
         let engine = ENGINE
             .get_or_init(|| Mutex::new(None))
@@ -563,24 +563,24 @@ pub unsafe extern "C" fn ghostshare_request(request: *const c_char) -> *mut c_ch
             .map_err(|e| e.to_string())?
     })
 }
-/// The desktop default download folder: `GHOSTFILE_DOWNLOAD_DIR`, else
-/// `~/Downloads/GhostShare`.
+/// The desktop default download folder: `HOLLERSHARE_DOWNLOAD_DIR`, else
+/// `~/Downloads/HollerShare`.
 fn default_directory() -> Result<PathBuf, String> {
-    if let Some(directory) = std::env::var_os("GHOSTFILE_DOWNLOAD_DIR") {
+    if let Some(directory) = std::env::var_os("HOLLERSHARE_DOWNLOAD_DIR") {
         return Ok(PathBuf::from(directory));
     }
     let dirs = directories::UserDirs::new().ok_or("Could not locate home directory")?;
-    Ok(dirs.download_dir().unwrap_or(dirs.home_dir()).join("GhostShare"))
+    Ok(dirs.download_dir().unwrap_or(dirs.home_dir()).join("HollerShare"))
 }
 /// Fails unless a file can be created in `directory`.
 fn check_writable(directory: &Path) -> Result<(), String> {
     let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos();
-    let probe = directory.join(format!(".ghostshare-write-test-{}-{nanos}", std::process::id()));
+    let probe = directory.join(format!(".hollershare-write-test-{}-{nanos}", std::process::id()));
     std::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(&probe)
-        .map_err(|_| "GhostShare can't write to this folder".to_string())?;
+        .map_err(|_| "HollerShare can't write to this folder".to_string())?;
     let _ = std::fs::remove_file(&probe);
     Ok(())
 }
@@ -604,7 +604,7 @@ fn download_directory(text: &str, create: bool) -> Result<PathBuf, String> {
     Ok(directory)
 }
 #[no_mangle]
-pub extern "C" fn ghostshare_stop() {
+pub extern "C" fn hollershare_stop() {
     let Some(lock) = ENGINE.get() else {
         return;
     };
@@ -623,7 +623,7 @@ pub extern "C" fn ghostshare_stop() {
 }
 /// Free exactly once a non-null pointer returned by start/request.
 #[no_mangle]
-pub unsafe extern "C" fn ghostshare_free(pointer: *mut c_char) {
+pub unsafe extern "C" fn hollershare_free(pointer: *mut c_char) {
     if !pointer.is_null() {
         drop(CString::from_raw(pointer));
     }
@@ -664,7 +664,7 @@ mod tests {
     #[test]
     fn rejects_non_files_and_empty_batches() {
         assert!(validate_paths(&[]).is_err());
-        assert!(validate_paths(&["/a/nonexistent/ghostshare".into()]).is_err());
+        assert!(validate_paths(&["/a/nonexistent/hollershare".into()]).is_err());
         assert!(validate_paths(&[std::env::temp_dir().to_string_lossy().into_owned()]).is_err());
     }
     #[test]
@@ -709,7 +709,7 @@ mod tests {
         assert_eq!(received_files(&bare).unwrap(), json!([{"path":"/r/a.txt", "name":"a.txt", "mime":""}]));
     }
     fn scratch(name: &str) -> PathBuf {
-        let path = std::env::temp_dir().join(format!("ghostshare-test-{}-{name}", std::process::id()));
+        let path = std::env::temp_dir().join(format!("hollershare-test-{}-{name}", std::process::id()));
         let _ = std::fs::remove_dir_all(&path);
         path
     }

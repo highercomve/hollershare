@@ -2,7 +2,7 @@
 //! start announcing their Quick Share endpoint over mDNS when they see the
 //! 0xFE2C advertisement, so they show up without their receiving screen
 //! open. Advertising needs an `AdvertiseCallback` subclass, which JNI can't
-//! make, so the work is in GhostShare's Kotlin helper
+//! make, so the work is in HollerShare's Kotlin helper
 //! (src/android/QuickShareBeacon.kt, copied into the Gradle project by
 //! build.zig); this calls its `start` and `stop`.
 //!
@@ -15,7 +15,7 @@ const std = @import("std");
 const oriel = @import("oriel");
 const jni = oriel.android.jni;
 
-const log = std.log.scoped(.ghostshare);
+const log = std.log.scoped(.hollershare);
 
 /// Start advertising (the helper waits for the permission and the adapter).
 pub fn start() void {
@@ -88,7 +88,7 @@ fn callIn(env: *jni.Env, comptime method: [:0]const u8) !void {
     if (env.clearException()) return error.Threw;
 }
 
-/// dev.ghostshare.QuickShareBeacon, through the Application's class loader.
+/// dev.hollershare.QuickShareBeacon, through the Application's class loader.
 fn helperClass(env: *jni.Env) !jni.jclass {
     const f = env.functions;
     // 1. Try to obtain the ClassLoader from dev/oriel/OrielRuntime (which is already loaded by the app)
@@ -133,7 +133,7 @@ fn loadHelper(env: *jni.Env, loader: jni.jobject) ?jni.jclass {
         _ = env.clearException();
         return null;
     };
-    const name = newString(env, "dev.ghostshare.QuickShareBeacon") orelse return null;
+    const name = newString(env, "dev.hollershare.QuickShareBeacon") orelse return null;
     defer f.DeleteLocalRef(env, name);
     const helper = f.CallObjectMethodA(env, loader, load_class, &[_]jni.jvalue{.{ .l = name }});
     if (env.clearException() or helper == null) return null;
@@ -154,7 +154,7 @@ fn helperClassViaActivityThread(env: *jni.Env) !jni.jclass {
 
     const class_loader = f.FindClass(env, "java/lang/ClassLoader") orelse return error.NoClassLoaderClass;
     const load_class = f.GetMethodID(env, class_loader, "loadClass", "(Ljava/lang/String;)Ljava/lang/Class;") orelse return error.NoLoadClass;
-    const name = newString(env, "dev.ghostshare.QuickShareBeacon") orelse return error.OutOfMemory;
+    const name = newString(env, "dev.hollershare.QuickShareBeacon") orelse return error.OutOfMemory;
     const helper = f.CallObjectMethodA(env, loader, load_class, &[_]jni.jvalue{.{ .l = name }});
     if (env.clearException() or helper == null) return error.NoHelperClass;
     return helper;

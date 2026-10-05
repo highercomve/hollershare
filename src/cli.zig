@@ -1,11 +1,11 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const config = @import("ghostshare_config");
+const config = @import("hollershare_config");
 
-extern fn ghostshare_start(directory: [*:0]const u8) ?[*:0]u8;
-extern fn ghostshare_request(request: [*:0]const u8) ?[*:0]u8;
-extern fn ghostshare_free(pointer: [*:0]u8) void;
-extern fn ghostshare_stop() void;
+extern fn hollershare_start(directory: [*:0]const u8) ?[*:0]u8;
+extern fn hollershare_request(request: [*:0]const u8) ?[*:0]u8;
+extern fn hollershare_free(pointer: [*:0]u8) void;
+extern fn hollershare_stop() void;
 
 pub fn isCliCommand(argv: []const []const u8) bool {
     if (argv.len == 0) return false;
@@ -45,7 +45,7 @@ pub fn run(init: std.process.Init, argv: []const []const u8) !u8 {
     }
 
     if (std.mem.eql(u8, cmd, "--version") or std.mem.eql(u8, cmd, "-v") or std.mem.eql(u8, cmd, "version")) {
-        printOut(io, "GhostShare {s}\n", .{config.version});
+        printOut(io, "HollerShare {s}\n", .{config.version});
         return 0;
     }
 
@@ -65,22 +65,22 @@ pub fn run(init: std.process.Init, argv: []const []const u8) !u8 {
         return runReceive(gpa, arena, io, argv[1..]);
     }
 
-    printErr(io, "Unknown command: {s}\nRun 'ghostshare --help' for usage.\n", .{cmd});
+    printErr(io, "Unknown command: {s}\nRun 'hollershare --help' for usage.\n", .{cmd});
     return 1;
 }
 
 fn printUsage(io: std.Io) void {
     printOut(io,
-        \\GhostShare {s} - Share files and text with Android Quick Share and nearby devices
+        \\HollerShare {s} - Share files and text with Android Quick Share and nearby devices
         \\
         \\Usage:
-        \\  ghostshare                                Launch desktop GUI app
-        \\  ghostshare send <files...> [options]       Send one or more files
-        \\  ghostshare send-text <text> [options]     Send plain text or URL (- for stdin)
-        \\  ghostshare scan [options]                 Scan for nearby Quick Share receivers
-        \\  ghostshare receive [options]              Run headless receiver
-        \\  ghostshare -h, --help                     Show this help message
-        \\  ghostshare -v, --version                  Show version
+        \\  hollershare                                Launch desktop GUI app
+        \\  hollershare send <files...> [options]       Send one or more files
+        \\  hollershare send-text <text> [options]     Send plain text or URL (- for stdin)
+        \\  hollershare scan [options]                 Scan for nearby Quick Share receivers
+        \\  hollershare receive [options]              Run headless receiver
+        \\  hollershare -h, --help                     Show this help message
+        \\  hollershare -v, --version                  Show version
         \\
         \\Options:
         \\  --to <target>        Target device name (e.g. "Pixel 8") or address (IP:port)
@@ -90,11 +90,11 @@ fn printUsage(io: std.Io) void {
         \\  --auto-accept        Automatically accept incoming transfers in receive mode
         \\
         \\Examples:
-        \\  ghostshare scan
-        \\  ghostshare send ./photo.jpg --to "Pixel 8"
-        \\  ghostshare send ./doc.pdf --to 192.168.1.50:54321
-        \\  ghostshare send-text "https://github.com" --to "Pixel 8"
-        \\  cat log.txt | ghostshare send-text - --to "Pixel 8"
+        \\  hollershare scan
+        \\  hollershare send ./photo.jpg --to "Pixel 8"
+        \\  hollershare send ./doc.pdf --to 192.168.1.50:54321
+        \\  hollershare send-text "https://github.com" --to "Pixel 8"
+        \\  cat log.txt | hollershare send-text - --to "Pixel 8"
         \\
     , .{config.version});
 }
@@ -118,8 +118,8 @@ fn requestJson(allocator: std.mem.Allocator, value: anytype) ![]const u8 {
     defer allocator.free(json);
     const terminated = try allocator.dupeZ(u8, json);
     defer allocator.free(terminated);
-    const response = ghostshare_request(terminated) orelse return error.QuickShareUnavailable;
-    defer ghostshare_free(response);
+    const response = hollershare_request(terminated) orelse return error.QuickShareUnavailable;
+    defer hollershare_free(response);
     return allocator.dupe(u8, std.mem.span(response));
 }
 
@@ -215,12 +215,12 @@ fn runScan(gpa: std.mem.Allocator, arena: std.mem.Allocator, io: std.Io, args: [
         }
     }
 
-    const start_resp = ghostshare_start("") orelse {
+    const start_resp = hollershare_start("") orelse {
         printErr(io, "Error: Failed to start Quick Share engine.\n", .{});
         return 1;
     };
-    defer ghostshare_free(start_resp);
-    defer ghostshare_stop();
+    defer hollershare_free(start_resp);
+    defer hollershare_stop();
 
     _ = requestJson(arena, .{ .command = "visibility", .visible = false }) catch {};
 
@@ -413,7 +413,7 @@ fn runSend(gpa: std.mem.Allocator, arena: std.mem.Allocator, io: std.Io, args: [
     }
 
     if (files.items.len == 0) {
-        printErr(io, "Error: No files specified to send.\nUsage: ghostshare send <files...> --to <target>\n", .{});
+        printErr(io, "Error: No files specified to send.\nUsage: hollershare send <files...> --to <target>\n", .{});
         return 1;
     }
 
@@ -448,19 +448,19 @@ fn runSend(gpa: std.mem.Allocator, arena: std.mem.Allocator, io: std.Io, args: [
         try canonical_paths.append(arena, real);
     }
 
-    const start_resp = ghostshare_start("") orelse {
+    const start_resp = hollershare_start("") orelse {
         printErr(io, "Error: Failed to start Quick Share engine.\n", .{});
         return 1;
     };
-    defer ghostshare_free(start_resp);
-    defer ghostshare_stop();
+    defer hollershare_free(start_resp);
+    defer hollershare_stop();
 
     _ = requestJson(arena, .{ .command = "visibility", .visible = false }) catch {};
 
     const resolved = try resolveTarget(gpa, arena, io, target, timeout_secs) orelse return 1;
 
     const snap_resp = requestJson(arena, .{ .command = "snapshot" }) catch "";
-    var default_name: []const u8 = "GhostShare";
+    var default_name: []const u8 = "HollerShare";
     if (std.json.parseFromSlice(std.json.Value, arena, snap_resp, .{})) |parsed| {
         if (parsed.value == .object) {
             if (parsed.value.object.get("data")) |d| {
@@ -530,7 +530,7 @@ fn runSendText(gpa: std.mem.Allocator, arena: std.mem.Allocator, io: std.Io, arg
     }
 
     if (text_arg == null) {
-        printErr(io, "Error: No text specified.\nUsage: ghostshare send-text <text> --to <target>\nPass '-' to read text from stdin.\n", .{});
+        printErr(io, "Error: No text specified.\nUsage: hollershare send-text <text> --to <target>\nPass '-' to read text from stdin.\n", .{});
         return 1;
     }
 
@@ -559,19 +559,19 @@ fn runSendText(gpa: std.mem.Allocator, arena: std.mem.Allocator, io: std.Io, arg
         return 1;
     }
 
-    const start_resp = ghostshare_start("") orelse {
+    const start_resp = hollershare_start("") orelse {
         printErr(io, "Error: Failed to start Quick Share engine.\n", .{});
         return 1;
     };
-    defer ghostshare_free(start_resp);
-    defer ghostshare_stop();
+    defer hollershare_free(start_resp);
+    defer hollershare_stop();
 
     _ = requestJson(arena, .{ .command = "visibility", .visible = false }) catch {};
 
     const resolved = try resolveTarget(gpa, arena, io, target, timeout_secs) orelse return 1;
 
     const snap_resp = requestJson(arena, .{ .command = "snapshot" }) catch "";
-    var default_name: []const u8 = "GhostShare";
+    var default_name: []const u8 = "HollerShare";
     if (std.json.parseFromSlice(std.json.Value, arena, snap_resp, .{})) |parsed| {
         if (parsed.value == .object) {
             if (parsed.value.object.get("data")) |d| {
@@ -768,16 +768,16 @@ fn runReceive(gpa: std.mem.Allocator, arena: std.mem.Allocator, io: std.Io, args
         };
     const dir_z = try arena.dupeZ(u8, canonical_dir);
 
-    const start_resp = ghostshare_start(dir_z) orelse {
+    const start_resp = hollershare_start(dir_z) orelse {
         printErr(io, "Error: Failed to start Quick Share engine.\n", .{});
         return 1;
     };
-    defer ghostshare_free(start_resp);
-    defer ghostshare_stop();
+    defer hollershare_free(start_resp);
+    defer hollershare_stop();
 
     _ = requestJson(arena, .{ .command = "visibility", .visible = true }) catch {};
 
-    printOut(io, "GhostShare receiver active.\nSaving to: {s}\nVisible to nearby devices. Press Ctrl+C to stop.\n\n", .{canonical_dir});
+    printOut(io, "HollerShare receiver active.\nSaving to: {s}\nVisible to nearby devices. Press Ctrl+C to stop.\n\n", .{canonical_dir});
 
     var seen_requests: std.ArrayList([]const u8) = .empty;
     defer seen_requests.deinit(arena);

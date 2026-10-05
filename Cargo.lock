@@ -740,8 +740,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "ghostshare-quickshare"
-version = "0.2.0"
+name = "hollershare-quickshare"
+version = "1.0.0"
 dependencies = [
  "directories",
  "rqs_lib",

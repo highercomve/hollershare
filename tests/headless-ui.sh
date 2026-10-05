@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Run this through Oriel scripts/headless.sh; all clicks stay on private Xvfb.
 set -euo pipefail
-./zig-out/bin/ghostshare >artifacts/ui.log 2>&1 &
+./zig-out/bin/hollershare >artifacts/ui.log 2>&1 &
 app_pid=$!
 trap 'kill "$app_pid" 2>/dev/null || true' EXIT
 sleep 3
-window=$(xdotool search --name "^GhostShare$" | head -1)
+window=$(xdotool search --name "^HollerShare$" | head -1)
 xdotool windowsize "$window" 980 860
 sleep 1
 # Toggle visibility and open the real GTK file picker.

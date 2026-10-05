@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Private display and D-Bus for GhostShare GUI tests. No user desktop access.
+# Private display and D-Bus for HollerShare GUI tests. No user desktop access.
 set -euo pipefail
 if [[ -z ${ORIEL_HEADLESS_INNER:-} ]]; then
     exec env -u WAYLAND_DISPLAY -u DISPLAY GDK_BACKEND=x11 NO_AT_BRIDGE=1 GTK_A11Y=none \

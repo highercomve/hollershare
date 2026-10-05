@@ -13,15 +13,15 @@ count = 0
 for root in roots:
     for path in root.rglob("*"):
         if path.is_file() and path.suffix.lower() in {".deb", ".rpm", ".appimage", ".dmg", ".exe", ".apk", ".aab"}:
-            shutil.copy2(path, output / f"ghostshare-{platform}-{path.name}")
+            shutil.copy2(path, output / f"hollershare-{platform}-{path.name}")
             count += 1
 # Updater payloads preserve the executable or the complete signed app bundle.
 if platform in {"linux-x86_64", "windows-x86_64"}:
     suffix = ".exe" if platform.startswith("windows") else ""
-    shutil.copy2(Path("zig-out/bin") / ("ghostshare" + suffix), output / (f"ghostshare-{platform}-update" + suffix))
+    shutil.copy2(Path("zig-out/bin") / ("hollershare" + suffix), output / (f"hollershare-{platform}-update" + suffix))
 elif platform == "macos-arm64":
-    with tarfile.open(output / "ghostshare-macos-arm64-update.app.tar.gz", "w:gz") as archive:
-        archive.add("zig-out/package/GhostShare.app", arcname="GhostShare.app")
+    with tarfile.open(output / "hollershare-macos-arm64-update.app.tar.gz", "w:gz") as archive:
+        archive.add("zig-out/package/HollerShare.app", arcname="HollerShare.app")
 if not count:
     raise SystemExit("No release packages found")
 with (output / f"SHA256SUMS-{platform}").open("w") as checksums:

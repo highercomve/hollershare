@@ -1,16 +1,25 @@
-# GhostShare logo
+# HollerShare logo
 
-The friendly coral ghost carries a rightward arrow: files moving from one device to another. Broad shapes and rounded corners keep the mark readable at small sizes.
+The holler: a megaphone blasting arrows across the room — your voice, and
+the files it sends onward. Two colors from the app's palette: the megaphone
+in the green tone, the arrows in coral.
 
-- `ghostshare-mark.svg`: transparent scalable mark.
-- `ghostshare-icon.svg` / `.png`: launcher icon on warm paper, 1024px PNG.
-- `ghostshare-tray.png`: transparent 128px tray icon.
+- `hollershare-mark.svg`: transparent scalable mark (megaphone `#45624b`,
+  arrows `#d95e43`).
+- `hollershare-icon.svg` / `.png`: launcher icon, the mark on a rounded
+  warm-paper tile, 1024px PNG.
+- `hollershare-tray.png`: transparent 128px tray icon.
 
-Colors: coral `#d95e43`, paper `#f5f1e9`, details `#fff7ed`.
+The app header uses raster PNGs (`frontend/brand-mark.png` and
+`brand-mark-dark.png`, sage `#aec79f` and coral `#f07a5a` for dark mode),
+because the marks' distinctive hand-traced shapes are too intricate for the
+native renderer's SVG parser to paint faithfully at small sizes.
 
 Export the PNGs with librsvg:
 
 ```sh
-rsvg-convert -w 1024 -h 1024 ghostshare-icon.svg -o ghostshare-icon.png
-rsvg-convert -w 128 -h 128 ghostshare-mark.svg -o ghostshare-tray.png
+rsvg-convert -w 1024 -h 1024 hollershare-icon.svg -o hollershare-icon.png
+rsvg-convert -w 128 -h 128 hollershare-mark.svg -o hollershare-tray.png
+rsvg-convert -w 160 -h 160 ../frontend/brand-mark.png hollershare-mark.svg 2>/dev/null || \
+  rsvg-convert -w 160 -o ../frontend/brand-mark.png hollershare-mark.svg
 ```

@@ -1,1 +1,1 @@
-pub const bytes = @embedFile("ghostshare-tray.png");
+pub const bytes = @embedFile("hollershare-tray.png");

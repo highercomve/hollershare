@@ -32,7 +32,7 @@ def method(connection, sender, path, interface, name, parameters, invocation):
         notifications.append(parameters.unpack())
         invocation.return_value(GLib.Variant("(u)", (1,)))
     elif name == "GetCapabilities": invocation.return_value(GLib.Variant("(as)", (["actions", "body"],)))
-    elif name == "GetServerInformation": invocation.return_value(GLib.Variant("(ssss)", ("test", "GhostShare", "1", "1.2")))
+    elif name == "GetServerInformation": invocation.return_value(GLib.Variant("(ssss)", ("test", "HollerShare", "1", "1.2")))
     else: invocation.return_value(None)
 
 def command(*args):
@@ -76,7 +76,7 @@ def close_window(window):
     x.XSendEvent(display, int(window), 0, 0, ctypes.byref(event)); x.XFlush(display); x.XCloseDisplay(display)
 
 def visible():
-    return subprocess.run(["xdotool", "search", "--onlyvisible", "--name", "^GhostShare$"], capture_output=True).returncode == 0
+    return subprocess.run(["xdotool", "search", "--onlyvisible", "--name", "^HollerShare$"], capture_output=True).returncode == 0
 
 def main():
     assert os.environ.get("ORIEL_HEADLESS_INNER"), "Use Oriel headless.sh to isolate the desktop"
@@ -85,7 +85,7 @@ def main():
         bus.call_sync("org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus", "RequestName", GLib.Variant("(su)", (name, 0)), None, Gio.DBusCallFlags.NONE, 1000, None)
     bus.register_object("/org/freedesktop/Notifications", info.interfaces[0], method, None, None)
     bus.register_object("/org/freedesktop/portal/desktop", info.interfaces[1], method, None, None)
-    with tempfile.TemporaryDirectory(prefix="ghostshare-desktop-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="hollershare-desktop-") as temporary:
         folder = Path(temporary)
         # Private default handlers record file/folder opens without launching
         # anything on the user's desktop.
@@ -94,10 +94,10 @@ def main():
         opened = folder / "opened.txt"
         handler = folder / "open.py"
         handler.write_text("import sys\nwith open(sys.argv[1], 'a') as f: f.write(sys.argv[2] + '\\n')\n")
-        (data / "applications/ghostshare-test.desktop").write_text(f'[Desktop Entry]\nType=Application\nName=Test open handler\nExec=python3 "{handler}" "{opened}" %u\nMimeType=text/plain;inode/directory;\nNoDisplay=true\n')
-        (config / "mimeapps.list").write_text("[Default Applications]\ntext/plain=ghostshare-test.desktop;\ninode/directory=ghostshare-test.desktop;\n")
+        (data / "applications/hollershare-test.desktop").write_text(f'[Desktop Entry]\nType=Application\nName=Test open handler\nExec=python3 "{handler}" "{opened}" %u\nMimeType=text/plain;inode/directory;\nNoDisplay=true\n')
+        (config / "mimeapps.list").write_text("[Default Applications]\ntext/plain=hollershare-test.desktop;\ninode/directory=hollershare-test.desktop;\n")
         receiver_port = port()
-        app = subprocess.Popen(["./zig-out/bin/ghostshare"], env=dict(os.environ, GHOSTFILE_PORT=str(receiver_port), GHOSTFILE_DOWNLOAD_DIR=str(folder / "received"), XDG_DATA_HOME=str(data), XDG_CONFIG_HOME=str(config), XDG_STATE_HOME=str(folder / "state")), stdout=open("artifacts/desktop.log", "w"), stderr=subprocess.STDOUT)
+        app = subprocess.Popen(["./zig-out/bin/hollershare"], env=dict(os.environ, HOLLERSHARE_PORT=str(receiver_port), HOLLERSHARE_DOWNLOAD_DIR=str(folder / "received"), XDG_DATA_HOME=str(data), XDG_CONFIG_HOME=str(config), XDG_STATE_HOME=str(folder / "state")), stdout=open("artifacts/desktop.log", "w"), stderr=subprocess.STDOUT)
         sender, child = mp.Pipe()
         sender_port = port()
         engine = mp.Process(target=worker, args=(child, folder / "sender", sender_port))
@@ -106,7 +106,7 @@ def main():
             pump(visible)
             pump(lambda: sender.poll())
             assert sender.recv()["ok"]
-            window = command("xdotool", "search", "--onlyvisible", "--name", "^GhostShare$").splitlines()[0]
+            window = command("xdotool", "search", "--onlyvisible", "--name", "^HollerShare$").splitlines()[0]
             tray = f"org.kde.StatusNotifierItem-{app.pid}-1"
             pump(lambda: tray in bus.call_sync("org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus", "ListNames", None, None, Gio.DBusCallFlags.NONE, 1000, None).unpack()[0])
             dbus(tray, "/MenuBar", "com.canonical.dbusmenu.GetLayout", "0", "3", "[]")
@@ -188,7 +188,7 @@ def main():
             click_notification("Deny")
             pump(lambda: request(sender, "snapshot")["transfers"][-1]["state"] in {"Rejected", "Disconnected"})
             assert not (folder / "received" / declined.name).exists() and not visible()
-            clipboard_text = "GhostShare clipboard 👻\nA second line"
+            clipboard_text = "HollerShare clipboard 👻\nA second line"
             before = len(notifications)
             request(sender, "send_text", address=f"127.0.0.1:{receiver_port}", name="Desktop", text=clipboard_text)
             pump(lambda: len(notifications) > before and notifications[-1][3] == "Incoming text")
@@ -205,9 +205,24 @@ def main():
             pump(visible)
             time.sleep(1)
             command("import", "-window", "root", "artifacts/clipboard-ui.png")
-            command("xdotool", "mousemove", "--window", window, "650", "550", "click", "1", "key", "ctrl+a")
+            # Nearby devices change the manual address field's vertical position.
+            # Find its paper-colored interior within the right-hand panel.
+            command("import", "-window", window, "artifacts/clipboard-send-ui.png")
+            with Image.open("artifacts/clipboard-send-ui.png") as image:
+                pixels = image.convert("RGB")
+                runs = []
+                start = None
+                for y in range(250, min(700, pixels.height)):
+                    if pixels.getpixel((650, y)) == (245, 241, 233) and pixels.getpixel((518, y)) == (252, 250, 245):
+                        if start is None: start = y
+                    elif start is not None:
+                        if 20 <= y - start <= 60: runs.append((start + y) // 2)
+                        start = None
+                assert len(runs) == 1, f"Could not locate the manual address field: {runs}"
+                address_y = runs[0]
+            command("xdotool", "mousemove", "--window", window, "650", str(address_y), "click", "1", "key", "ctrl+a")
             command("xdotool", "type", "--clearmodifiers", f"127.0.0.1:{sender_port}")
-            command("xdotool", "mousemove", "--window", window, "895", "550", "click", "1")
+            command("xdotool", "mousemove", "--window", window, "895", str(address_y), "click", "1")
             def clipboard_sent():
                 return next((t for t in request(sender, "snapshot")["transfers"] if t["rtype"] == "Inbound" and t["state"] == "WaitingForUserConsent"), None)
             pump(clipboard_sent)

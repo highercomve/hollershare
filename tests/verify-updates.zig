@@ -12,7 +12,7 @@ pub fn main(init: std.process.Init) !void {
     var entries = parsed.value.object.get("platforms").?.object.iterator();
     while (entries.next()) |entry| {
         const verified = try manifest.verifyForTarget(allocator, json, key, entry.key_ptr.*, .{});
-        if (!std.mem.eql(u8, verified.app_id, "dev.ghostshare.App")) return error.UnexpectedAppIdentity;
+        if (!std.mem.eql(u8, verified.app_id, "dev.hollershare.App")) return error.UnexpectedAppIdentity;
         const payload_path = try std.fs.path.join(allocator, &.{ args[1], std.fs.path.basename(verified.url) });
         const stat = try std.Io.Dir.cwd().statFile(init.io, payload_path, .{});
         if (stat.size != verified.size) return error.PayloadSizeMismatch;

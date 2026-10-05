@@ -316,7 +316,7 @@ pub fn p256_point_bytes(x: &[u8], y: &[u8]) -> Result<[u8; 65], anyhow::Error> {
     Ok(result)
 }
 #[cfg(test)]
-mod ghostfile_key_tests {
+mod hollershare_key_tests {
     use super::*;
     #[test]
     fn pads_short_coordinates_and_rejects_oversized_keys() {

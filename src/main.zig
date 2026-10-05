@@ -19,26 +19,26 @@ const android_beacon = if (builtin.abi == .android) @import("android_beacon.zig"
 };
 
 pub const std_options: std.Options = .{ .logFn = oriel.log.logFn };
-extern fn ghostshare_start(directory: [*:0]const u8) ?[*:0]u8;
-extern fn ghostshare_request(request: [*:0]const u8) ?[*:0]u8;
-extern fn ghostshare_free(pointer: [*:0]u8) void;
-extern fn ghostshare_stop() void;
-extern fn ghostshare_set_device_name(name: ?[*:0]const u8) void;
-extern fn ghostshare_set_event_callback(callback: ?*const fn ([*:0]const u8) callconv(.c) void) void;
-extern fn ghostshare_desktop_init(application: ?*anyopaque, window: ?*anyopaque) void;
-extern fn ghostshare_desktop_cleanup() void;
-extern fn ghostshare_desktop_dark() c_int;
-extern fn ghostshare_desktop_quit() void;
-extern fn ghostshare_desktop_notify(id: [*:0]const u8, kind: [*:0]const u8, name: [*:0]const u8, pin: [*:0]const u8, text: c_int) void;
-extern fn ghostshare_open_path(path: [*:0]const u8) c_int;
+extern fn hollershare_start(directory: [*:0]const u8) ?[*:0]u8;
+extern fn hollershare_request(request: [*:0]const u8) ?[*:0]u8;
+extern fn hollershare_free(pointer: [*:0]u8) void;
+extern fn hollershare_stop() void;
+extern fn hollershare_set_device_name(name: ?[*:0]const u8) void;
+extern fn hollershare_set_event_callback(callback: ?*const fn ([*:0]const u8) callconv(.c) void) void;
+extern fn hollershare_desktop_init(application: ?*anyopaque, window: ?*anyopaque) void;
+extern fn hollershare_desktop_cleanup() void;
+extern fn hollershare_desktop_dark() c_int;
+extern fn hollershare_desktop_quit() void;
+extern fn hollershare_desktop_notify(id: [*:0]const u8, kind: [*:0]const u8, name: [*:0]const u8, pin: [*:0]const u8, text: c_int) void;
+extern fn hollershare_open_path(path: [*:0]const u8) c_int;
 var tray: ?*oriel.tray.Tray = null;
 var startup_error: ?[]const u8 = null;
 /// Where received files go: set by `main` before `start_engine`.
 var engine_directory: [:0]const u8 = "";
-/// The platform's default download folder, as `ghostshare_start` takes it:
+/// The platform's default download folder, as `hollershare_start` takes it:
 /// "" on desktop (the engine's default), `<external files>/Received` on Android.
 var default_directory: [:0]const u8 = "";
-const app_id = "dev.ghostshare.App";
+const app_id = "dev.hollershare.App";
 var app_io: std.Io = undefined;
 /// The app's data directory, where settings.json lives (null: unavailable).
 var data_dir: ?[]const u8 = null;
@@ -58,8 +58,8 @@ fn request_json(allocator: std.mem.Allocator, value: anytype) ![]const u8 {
     defer allocator.free(json);
     const terminated = try allocator.dupeZ(u8, json);
     defer allocator.free(terminated);
-    const response = ghostshare_request(terminated) orelse return error.QuickShareUnavailable;
-    defer ghostshare_free(response);
+    const response = hollershare_request(terminated) orelse return error.QuickShareUnavailable;
+    defer hollershare_free(response);
     return allocator.dupe(u8, std.mem.span(response));
 }
 pub const Events = struct {
@@ -72,6 +72,7 @@ pub const Events = struct {
     review_request: struct { id: []const u8 },
     /// Received files couldn't be saved to the folder chosen in Settings.
     folder_error: []const u8,
+    share_target: []const u8,
 };
 fn show_window() void {
     oriel.App.showWindow();
@@ -151,7 +152,7 @@ fn set_device_name(gpa: std.mem.Allocator) void {
     defer gpa.free(name);
     const name_z = gpa.dupeZ(u8, name) catch return;
     defer gpa.free(name_z);
-    ghostshare_set_device_name(name_z);
+    hollershare_set_device_name(name_z);
 }
 /// Start the Quick Share engine; a failure it reports is kept for the page
 /// (`snapshot`).
@@ -159,8 +160,8 @@ fn start_engine(gpa: std.mem.Allocator) !void {
     set_device_name(gpa);
     // Before the engine starts browsing, so its first mDNS answers get through.
     android_multicast.acquire();
-    const response = ghostshare_start(engine_directory) orelse return error.QuickShareUnavailable;
-    defer ghostshare_free(response);
+    const response = hollershare_start(engine_directory) orelse return error.QuickShareUnavailable;
+    defer hollershare_free(response);
     const result = try std.json.parseFromSlice(struct { ok: bool }, gpa, std.mem.span(response), .{ .ignore_unknown_fields = true });
     defer result.deinit();
     if (!result.value.ok) startup_error = try gpa.dupe(u8, std.mem.span(response));
@@ -186,32 +187,32 @@ fn setup() !void {
     // Wake nearby phones so discovery finds them (Linux does this in the
     // engine, with BlueZ). The helper waits for the permission and the adapter.
     if (builtin.abi == .android) android_beacon.start();
-    if (desktop_linux) ghostshare_desktop_init(oriel.App.gtk_app, oriel.App.main_window);
+    if (desktop_linux) hollershare_desktop_init(oriel.App.gtk_app, oriel.App.main_window);
     tray = oriel.tray.Tray.create(std.heap.smp_allocator, .{
-        .id = "dev.ghostshare.App",
-        .title = "GhostShare",
+        .id = "dev.hollershare.App",
+        .title = "HollerShare",
         .tooltip = "Share files nearby",
         .icon = .{ .png = @import("tray_icon").bytes },
         .menu = &.{
-            .{ .item = .{ .id = "show", .label = "Show GhostShare" } },
+            .{ .item = .{ .id = "show", .label = "Show HollerShare" } },
             .{ .item = .{ .id = "send", .label = "Send files…" } },
             .{ .item = .{ .id = "clipboard", .label = "Send clipboard…" } },
             .{ .check = .{ .id = "visible", .label = "Visible to nearby devices", .checked = true } },
             .separator,
             .{ .item = .{ .id = "updates", .label = "Check for updates" } },
             .separator,
-            .{ .item = .{ .id = "quit", .label = "Quit GhostShare" } },
+            .{ .item = .{ .id = "quit", .label = "Quit HollerShare" } },
         },
         .on_menu = tray_menu,
         .on_activate = show_window,
     }) catch null;
     if (@hasDecl(oriel.notification, "onAction")) oriel.notification.onAction(notification_action);
-    ghostshare_set_event_callback(transfer_event);
+    hollershare_set_event_callback(transfer_event);
 }
-export fn ghostshare_theme_changed(dark: c_int) void {
+export fn hollershare_theme_changed(dark: c_int) void {
     oriel.App.events(Events).emit(.system_theme, .{ .dark = dark != 0 });
 }
-export fn ghostshare_review_transfer(id: [*:0]const u8) void {
+export fn hollershare_review_transfer(id: [*:0]const u8) void {
     notification_action(std.mem.span(id), null);
 }
 const NotificationEvent = struct { bytes: [4096]u8, len: usize };
@@ -234,22 +235,30 @@ fn notify_main(event: NotificationEvent) void {
         const kind = allocator.dupeZ(u8, parsed.value.kind) catch return;
         const name = allocator.dupeZ(u8, parsed.value.name) catch return;
         const pin = allocator.dupeZ(u8, parsed.value.pin orelse "") catch return;
-        ghostshare_desktop_notify(id, kind, name, pin, @intFromBool(parsed.value.text));
+        hollershare_desktop_notify(id, kind, name, pin, @intFromBool(parsed.value.text));
         return;
     }
     if (dismiss) return;
     const incoming = std.mem.eql(u8, parsed.value.kind, "request");
-    const body = std.fmt.allocPrint(allocator, "{s}{s}{s}{s}", .{ parsed.value.name, if (incoming) (if (parsed.value.text) " wants to share text. Compare this code before accepting: " else " wants to share files. Compare this code before accepting: ") else (if (parsed.value.text) " · Text is ready to copy in GhostShare." else " · Files are ready. Open GhostShare to view them."), (if (incoming) parsed.value.pin orelse "" else ""), if (incoming and !parsed.value.text) " · Accept saves to the default folder." else "" }) catch return;
+    // A finished text transfer is the sender's clipboard: put it on this
+    // device's clipboard right away instead of asking for a tap (Android 10+
+    // restricts clipboard reads, not writes). The notification reports it;
+    // the "Copy text" action stays for when the clipboard moved on.
+    if (!incoming and parsed.value.text) {
+        copy_received_text(parsed.value.id, parsed.value.name);
+        return;
+    }
+    const body = std.fmt.allocPrint(allocator, "{s}{s}{s}{s}", .{ parsed.value.name, if (incoming) (if (parsed.value.text) " wants to share text. Compare this code before accepting: " else " wants to share files. Compare this code before accepting: ") else " · Files are ready. Open HollerShare to view them.", (if (incoming) parsed.value.pin orelse "" else ""), if (incoming and !parsed.value.text) " · Accept saves to the default folder." else "" }) catch return;
     if (@hasDecl(oriel.notification, "onAction")) {
         oriel.notification.notify(.{
             .id = parsed.value.id,
-            .title = if (parsed.value.text) (if (incoming) "Incoming text" else "Text received") else (if (incoming) "Incoming files" else "Files received"),
+            .title = if (incoming) (if (parsed.value.text) "Incoming text" else "Incoming files") else "Files received",
             .body = body,
             .actions = if (incoming) (if (parsed.value.pin != null) &.{
                 .{ .id = "accept", .label = "Accept" },
                 .{ .id = "review", .label = "Review" },
                 .{ .id = "decline", .label = "Deny" },
-            } else &.{ .{ .id = "review", .label = "Review" }, .{ .id = "decline", .label = "Deny" } }) else if (parsed.value.text) &.{ .{ .id = "copy_text", .label = "Copy text" }, .{ .id = "review", .label = "Review" } } else if (android) &.{
+            } else &.{ .{ .id = "review", .label = "Review" }, .{ .id = "decline", .label = "Deny" } }) else if (android) &.{
                 // Android can't open received files from here (see open_transfer).
                 .{ .id = "review", .label = "Review" },
             } else &.{
@@ -258,15 +267,66 @@ fn notify_main(event: NotificationEvent) void {
             },
         }) catch {};
     } else {
-        oriel.notification.notify(.{ .id = parsed.value.id, .title = if (parsed.value.text) (if (incoming) "Incoming text" else "Text received") else (if (incoming) "Incoming files" else "Files received"), .body = body }) catch {};
+        oriel.notification.notify(.{ .id = parsed.value.id, .title = if (incoming) (if (parsed.value.text) "Incoming text" else "Incoming files") else "Files received", .body = body }) catch {};
     }
+}
+/// A received text transfer to copy: the engine's id and the sender's name,
+/// both bounded like `NotificationTask`.
+const TextCopy = struct {
+    id: [256]u8,
+    len: usize,
+    name: [256]u8,
+    name_len: usize,
+};
+/// How the copy went, for the notification shown on the main thread.
+const TextCopyOutcome = struct {
+    id: [256]u8,
+    len: usize,
+    name: [256]u8,
+    name_len: usize,
+    copied: bool,
+};
+fn copy_received_text(id: []const u8, name: []const u8) void {
+    if (id.len > 256) return;
+    var task: TextCopy = .{ .id = undefined, .len = id.len, .name = undefined, .name_len = @min(name.len, 256) };
+    @memcpy(task.id[0..id.len], id);
+    @memcpy(task.name[0..task.name_len], name[0..task.name_len]);
+    oriel.App.spawn(text_copy_task, .{task}) catch {
+        // Couldn't start the copy: ask for a tap instead.
+        notify_text_outcome(.{ .id = task.id, .len = task.len, .name = task.name, .name_len = task.name_len, .copied = false });
+    };
+}
+fn text_copy_task(task: TextCopy) void {
+    var arena: std.heap.ArenaAllocator = .init(std.heap.smp_allocator);
+    defer arena.deinit();
+    var copied = true;
+    Commands.copy_transfer(arena.allocator(), .{ .id = task.id[0..task.len] }) catch |err| {
+        std.log.warn("copying received text to the clipboard: {s}", .{@errorName(err)});
+        copied = false;
+    };
+    oriel.App.runOnMain(TextCopyOutcome{ .id = task.id, .len = task.len, .name = task.name, .name_len = task.name_len, .copied = copied }, notify_text_outcome);
+}
+fn notify_text_outcome(outcome: TextCopyOutcome) void {
+    var arena: std.heap.ArenaAllocator = .init(std.heap.smp_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const body = std.fmt.allocPrint(allocator, "{s} · {s}", .{ outcome.name[0..outcome.name_len], if (outcome.copied) "Copied to your clipboard." else "Text is ready to copy in HollerShare." }) catch return;
+    oriel.notification.notify(.{
+        .id = outcome.id[0..outcome.len],
+        .title = "Text received",
+        .body = body,
+        .actions = &.{
+            .{ .id = "copy_text", .label = "Copy text" },
+            .{ .id = "review", .label = "Review" },
+        },
+    }) catch {};
 }
 const NotificationTask = struct {
     id: [256]u8,
     len: usize,
     action: enum { accept, decline, open_file, open_folder, copy_text },
 };
-export fn ghostshare_notification_action(id: [*:0]const u8, action: [*:0]const u8) void {
+export fn hollershare_notification_action(id: [*:0]const u8, action: [*:0]const u8) void {
     notification_action(std.mem.span(id), std.mem.span(action));
 }
 fn notification_action(id: []const u8, action: ?[]const u8) void {
@@ -308,9 +368,9 @@ fn perform_notification_task(allocator: std.mem.Allocator, task: NotificationTas
 }
 fn notification_failed(_: void) void {
     show_window();
-    oriel.App.events(Events).emit(.notification_error, "This notification is no longer available. Review the transfer in GhostShare.");
+    oriel.App.events(Events).emit(.notification_error, "This notification is no longer available. Review the transfer in HollerShare.");
 }
-/// Android: received files move from GhostShare's own folder (where the
+/// Android: received files move from HollerShare's own folder (where the
 /// engine writes them) into the folder chosen in Settings, a Storage Access
 /// Framework tree, once their transfer finishes. `oriel.dialog.saveToFolder`
 /// copies each one (it blocks: the copy runs on a thread of its own), then
@@ -350,7 +410,7 @@ const relocation = struct {
         if (!settings.usableFolderId(saved.download_folder, true)) return;
         move(gpa, event.id, saved.download_folder, saved.download_folder_name) catch |err| {
             std.log.warn("moving transfer {s} to the download folder: {s}", .{ event.id, @errorName(err) });
-            report(gpa, event.id, .{ .state = "failed", .folder = saved.download_folder_name, .@"error" = "GhostShare couldn't move the files. They're in GhostShare's folder." });
+            report(gpa, event.id, .{ .state = "failed", .folder = saved.download_folder_name, .@"error" = "HollerShare couldn't move the files. They're in HollerShare's folder." });
         };
     }
 
@@ -362,7 +422,7 @@ const relocation = struct {
         folder: []const u8,
         /// The names the moved files got there (" (1)" on a clash).
         names: []const []const u8 = &.{},
-        /// Files left in GhostShare's folder.
+        /// Files left in HollerShare's folder.
         kept: usize = 0,
         @"error": ?[]const u8 = null,
     };
@@ -397,7 +457,7 @@ const relocation = struct {
                 std.log.warn("removing {s} after moving it: {s}", .{ file.path, @errorName(err) });
         }
         const kept = files.len - names.items.len;
-        if (revoked) problem = "GhostShare can't save to this folder any more. Choose a folder again in Settings.";
+        if (revoked) problem = "HollerShare can't save to this folder any more. Choose a folder again in Settings.";
         report(gpa, id, .{
             .state = if (kept == 0) "moved" else if (names.items.len == 0) "failed" else "partial",
             .folder = folder_name,
@@ -408,8 +468,8 @@ const relocation = struct {
         if (revoked) {
             folder_unavailable.store(true, .release);
             var message: FolderMessage = .{ .bytes = undefined, .len = 0 };
-            const text = std.fmt.bufPrint(&message.bytes, "GhostShare can't save to “{s}” any more, so received files stay in GhostShare’s folder. Choose a folder again in Settings.", .{folder_name}) catch blk: {
-                const short = "GhostShare can't save to the chosen folder any more. Choose a folder again in Settings.";
+            const text = std.fmt.bufPrint(&message.bytes, "HollerShare can't save to “{s}” any more, so received files stay in HollerShare’s folder. Choose a folder again in Settings.", .{folder_name}) catch blk: {
+                const short = "HollerShare can't save to the chosen folder any more. Choose a folder again in Settings.";
                 @memcpy(message.bytes[0..short.len], short);
                 break :blk message.bytes[0..short.len];
             };
@@ -439,20 +499,89 @@ const relocation = struct {
         oriel.App.events(Events).emit(.folder_error, message.bytes[0..message.len]);
     }
 };
+
+var pending_share_lock: std.Io.Mutex = .init;
+var pending_share_json: ?[]const u8 = null;
+
+const SharedPayloadFile = struct {
+    path: []const u8,
+    name: []const u8,
+    size: u64,
+};
+
+const SharedPayloadView = struct {
+    mode: []const u8,
+    files: []const SharedPayloadFile,
+};
+
+fn set_pending_share_json(json: []const u8) void {
+    pending_share_lock.lockUncancelable(app_io);
+    defer pending_share_lock.unlock(app_io);
+    if (pending_share_json) |old| {
+        std.heap.smp_allocator.free(old);
+    }
+    pending_share_json = std.heap.smp_allocator.dupe(u8, json) catch null;
+    if (pending_share_json) |payload| {
+        oriel.App.events(Events).emit(.share_target, payload);
+    }
+}
+
+fn handle_share_args(args: []const []const u8) void {
+    var i: usize = 0;
+    while (i < args.len) : (i += 1) {
+        if (std.mem.eql(u8, args[i], "--share-payload")) {
+            if (i + 1 < args.len) {
+                set_pending_share_json(args[i + 1]);
+                return;
+            }
+        }
+    }
+}
+
+fn handle_desktop_file_args(allocator: std.mem.Allocator, args: []const []const u8) void {
+    var file_list: std.ArrayList(SharedPayloadFile) = .empty;
+    defer file_list.deinit(allocator);
+
+    for (args) |arg| {
+        if (std.mem.startsWith(u8, arg, "-")) continue;
+        const file = std.Io.Dir.cwd().openFile(app_io, arg, .{}) catch continue;
+        defer file.close(app_io);
+        const stat = file.stat(app_io) catch continue;
+        if (stat.kind != .file) continue;
+
+        file_list.append(allocator, .{
+            .path = arg,
+            .name = std.fs.path.basename(arg),
+            .size = stat.size,
+        }) catch continue;
+    }
+
+    if (file_list.items.len == 0) return;
+
+    const payload = SharedPayloadView{
+        .mode = "files",
+        .files = file_list.items,
+    };
+    const json = std.json.Stringify.valueAlloc(allocator, payload, .{}) catch return;
+    defer allocator.free(json);
+    set_pending_share_json(json);
+}
+
 fn second_instance(args: []const []const u8) void {
-    _ = args;
+    handle_share_args(args);
+    if (builtin.abi != .android) handle_desktop_file_args(std.heap.smp_allocator, args);
     show_window();
 }
 fn request_quit() void {
-    if (desktop_linux) ghostshare_desktop_quit() else ghostshare_quit_requested();
+    if (desktop_linux) hollershare_desktop_quit() else hollershare_quit_requested();
 }
-export fn ghostshare_quit_requested() void {
-    ghostshare_set_event_callback(null);
+export fn hollershare_quit_requested() void {
+    hollershare_set_event_callback(null);
     oriel.App.quit(0);
 }
 
 pub const Commands = struct {
-    pub const async_commands = .{ "settings_get", "settings_save", "settings_folder", "snapshot", "select_file", "send_files", "read_clipboard", "send_text", "copy_transfer", "decide", "cancel", "visibility", "select_folder", "open_transfer", "updater_check", "updater_install", "updater_restart" };
+    pub const async_commands = .{ "settings_get", "settings_save", "settings_folder", "snapshot", "select_file", "send_files", "read_clipboard", "send_text", "copy_transfer", "decide", "cancel", "visibility", "select_folder", "open_transfer", "updater_check", "updater_install", "updater_restart", "get_pending_share" };
     pub const update_info = updates.info;
     pub const updater_check = updates.check;
     pub const updater_install = updates.install;
@@ -473,25 +602,38 @@ pub const Commands = struct {
         }
         try updates.restart(allocator, io);
     }
+    pub fn get_pending_share(allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
+        pending_share_lock.lockUncancelable(io);
+        defer pending_share_lock.unlock(io);
+        if (pending_share_json) |json| {
+            defer {
+                std.heap.smp_allocator.free(json);
+                pending_share_json = null;
+            }
+            return std.fmt.allocPrint(allocator, "{{\"ok\":true,\"data\":{s}}}", .{json});
+        }
+        return allocator.dupe(u8, "{\"ok\":true,\"data\":null}");
+    }
     pub fn settings_get(allocator: std.mem.Allocator, io: std.Io) !SettingsView {
         return settings_view(allocator, io);
     }
     /// Save the device name (empty: the system's name), which takes effect
     /// at once (mDNS re-announces it). `default_folder` also goes back to
-    /// the default download folder ("Reset to defaults").
+    /// the platform default (empty in the settings file).
     pub fn settings_save(allocator: std.mem.Allocator, io: std.Io, args: struct { device_name: []const u8 = "", default_folder: bool = false }) !SettingsView {
-        const name = settings.normalizeName(args.device_name) catch |err| return oriel.ipc.fail("{s}", .{settings.nameErrorMessage(err)});
-        if (args.default_folder) try apply_folder(allocator, io, null);
+        const trimmed = std.mem.trim(u8, args.device_name, " \t\r\n");
+        if (trimmed.len > 64) return oriel.ipc.fail("Device names can be up to 64 characters long", .{});
         var next = try current_settings(allocator);
-        next.device_name = name;
+        next.device_name = trimmed;
+        if (args.default_folder) {
+            if (next.download_folder.len > 0) oriel.dialog.forgetFolder(next.download_folder);
+            next.download_folder = "";
+            next.download_folder_name = "";
+        }
         try store_settings(allocator, io, next);
         set_device_name(allocator);
         return settings_view(allocator, io);
     }
-    /// Change the download folder: `choose` asks for one with the system's
-    /// folder picker (oriel.dialog.openFolder; cancelling changes nothing),
-    /// else back to the default folder. Applies to transfers accepted from
-    /// now on, and is saved at once.
     pub fn settings_folder(allocator: std.mem.Allocator, io: std.Io, args: struct { choose: bool }) !SettingsView {
         if (!args.choose) {
             try apply_folder(allocator, io, null);
@@ -549,7 +691,7 @@ pub const Commands = struct {
         return folder.id; // the folder's path on desktops
     }
     pub fn system_info() struct { dark: ?bool, android: bool } {
-        return .{ .dark = if (desktop_linux) ghostshare_desktop_dark() != 0 else null, .android = android };
+        return .{ .dark = if (desktop_linux) hollershare_desktop_dark() != 0 else null, .android = android };
     }
     pub fn quit() void {
         request_quit();
@@ -563,10 +705,10 @@ pub const Commands = struct {
         const path = try allocator.dupeZ(u8, parsed.value.data orelse return error.MissingPath);
         defer allocator.free(path);
         if (desktop_linux) {
-            if (ghostshare_open_path(path) == 0) return oriel.ipc.fail("Could not open this file or folder", .{});
+            if (hollershare_open_path(path) == 0) return oriel.ipc.fail("Could not open this file or folder", .{});
         } else if (android) {
             // Oriel's openExternal can't hand another app a file of
-            // GhostShare's (no content:// grant), nor a document of the
+            // HollerShare's (no content:// grant), nor a document of the
             // chosen folder: open received files from the Files app.
             return oriel.ipc.fail("Open received files from your Files app", .{});
         } else return oriel.ipc.fail("Opening files is currently supported on Linux", .{});
@@ -591,7 +733,7 @@ const SettingsView = struct {
     folder_available: bool,
     /// Whether "Choose…" works here (oriel.dialog.openFolder).
     folder_picker: bool,
-    /// Android: the engine receives into GhostShare's folder, and finished
+    /// Android: the engine receives into HollerShare's folder, and finished
     /// transfers move to the chosen folder.
     android: bool,
 };
@@ -664,7 +806,7 @@ fn apply_folder(allocator: std.mem.Allocator, io: std.Io, folder: ?oriel.dialog.
 }
 /// The folder saved in Settings while it is still a folder, else the
 /// platform default (a folder on a drive that's gone isn't recreated).
-/// Android: always GhostShare's own folder, the staging area for
+/// Android: always HollerShare's own folder, the staging area for
 /// `relocation`.
 fn start_directory(io: std.Io) []const u8 {
     const saved = saved_settings.download_folder;
@@ -681,8 +823,11 @@ fn start_directory(io: std.Io) []const u8 {
 pub fn main(init: std.process.Init) !u8 {
     app_io = init.io;
     load_settings(init.io);
+    const arena = init.arena.allocator();
+    if (init.minimal.args.toSlice(arena)) |all_args| {
+        handle_share_args(all_args);
+    } else |_| {}
     if (builtin.abi != .android) {
-        const arena = init.arena.allocator();
         const all_args = try init.minimal.args.toSlice(arena);
         const argv = try arena.alloc([]const u8, all_args.len -| 1);
         for (argv, 1..) |*a, i| a.* = all_args[i];
@@ -691,6 +836,7 @@ pub fn main(init: std.process.Init) !u8 {
             set_device_name(init.gpa);
             return cli.run(init, argv);
         }
+        handle_desktop_file_args(arena, argv);
     }
 
     const directory = if (builtin.abi == .android) try std.fs.path.join(init.arena.allocator(), &.{ oriel.platform.impl.paths.externalFilesDir() orelse return error.MissingAndroidStorage, "Received" }) else "";
@@ -699,19 +845,19 @@ pub fn main(init: std.process.Init) !u8 {
     defer android_multicast.release();
     defer android_beacon.stop();
     if (builtin.abi != .android) try start_engine(init.arena.allocator());
-    defer ghostshare_stop();
+    defer hollershare_stop();
     defer {
-        ghostshare_set_event_callback(null);
+        hollershare_set_event_callback(null);
         if (@hasDecl(oriel.notification, "onAction")) oriel.notification.onAction(null);
         if (tray) |icon| icon.deinit();
-        if (desktop_linux) ghostshare_desktop_cleanup();
+        if (desktop_linux) hollershare_desktop_cleanup();
     }
     return oriel.main(init, .{ .commands = Commands, .events = Events }, .{
         .setup = setup,
         .on_close = if (builtin.abi == .android) .quit else .hide,
         .on_second_instance = second_instance,
-        .id = "dev.ghostshare.App",
-        .title = "GhostShare",
+        .id = "dev.hollershare.App",
+        .title = "HollerShare",
         .width = 980,
         .height = 860,
         .assets = app.assets,

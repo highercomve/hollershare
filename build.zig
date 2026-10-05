@@ -7,7 +7,7 @@ pub fn build(b: *std.Build) void {
     const target = oriel.resolveTarget(b, b.standardTargetOptions(.{}));
     const optimize = b.standardOptimizeOption(.{});
     const android = target.result.abi == .android;
-    const version = std.mem.trimStart(u8, b.option([]const u8, "app-version", "Package version") orelse b.graph.environ_map.get("GHOSTFILE_VERSION") orelse "0.2.0", "v");
+    const version = std.mem.trimStart(u8, b.option([]const u8, "app-version", "Package version") orelse b.graph.environ_map.get("HOLLERSHARE_VERSION") orelse "1.0.0", "v");
     _ = std.SemanticVersion.parse(version) catch @panic("Package version must be semantic version, e.g. 0.1.0");
     // Oriel's built-in modules and plugins. Switch on what the app uses:
     // anything left off is neither compiled nor linked.
@@ -37,13 +37,13 @@ pub fn build(b: *std.Build) void {
     const config = b.addOptions();
     config.addOption([]const u8, "version", version);
     const application = oriel.addApp(b, dep, .{
-        .name = "ghostshare",
+        .name = "hollershare",
         .imports = &.{
-            .{ .name = "ghostshare_config", .module = config.createModule() },
+            .{ .name = "hollershare_config", .module = config.createModule() },
             .{ .name = "tray_icon", .module = b.createModule(.{ .root_source_file = b.path("assets/brand/tray-icon.zig") }) },
         },
         .root_source_file = b.path("src/main.zig"),
-        .icon = b.path("assets/brand/ghostshare-icon.png"), // High-resolution PNG (1024x1024 recommended)
+        .icon = b.path("assets/brand/hollershare-icon.png"), // High-resolution PNG (1024x1024 recommended)
         .frontend = .{
             // A static page: embedded as-is, no npm and no dev server.
             .dir = "frontend",
@@ -62,8 +62,8 @@ pub fn build(b: *std.Build) void {
             .local_network = "Find and reach devices on your network to share files with",
         },
         .package = .{
-            .id = "dev.ghostshare.App",
-            .name = "GhostShare",
+            .id = "dev.hollershare.App",
+            .name = "HollerShare",
             // .publisher = "Your Name <you@example.com>", // default: from the app id
             .summary = "Share files with computers and Android Quick Share",
             .version = version,
@@ -76,11 +76,11 @@ pub fn build(b: *std.Build) void {
     // matching Rust target and target libraries; this build supports the host.
     const rust_target = b.option([]const u8, "rust-target", "Rust target triple (required for desktop cross compilation)");
     const cargo = if (android) b.addSystemCommand(&.{ "cargo", "ndk", "--platform", "29", "--target", if (target.result.cpu.arch == .aarch64) "arm64-v8a" else "x86_64", "build" }) else b.addSystemCommand(&.{ "cargo", "build" });
-    cargo.addArgs(&.{ "--locked", "--release", "--package", "ghostshare-quickshare", "--target-dir", b.pathFromRoot("target") });
+    cargo.addArgs(&.{ "--locked", "--release", "--package", "hollershare-quickshare", "--target-dir", b.pathFromRoot("target") });
     if (android) cargo.addArg("--no-default-features");
     if (!android) if (rust_target) |triple| cargo.addArgs(&.{ "--target", triple });
     const triple = if (android) (if (target.result.cpu.arch == .aarch64) "aarch64-linux-android" else "x86_64-linux-android") else rust_target;
-    const library_name = if (target.result.os.tag == .windows and target.result.abi == .msvc) "ghostshare_quickshare.lib" else "libghostshare_quickshare.a";
+    const library_name = if (target.result.os.tag == .windows and target.result.abi == .msvc) "hollershare_quickshare.lib" else "libhollershare_quickshare.a";
     const library_path = if (triple) |t| b.fmt("target/{s}/release/{s}", .{ t, library_name }) else b.fmt("target/release/{s}", .{library_name});
     application.exe.root_module.addObjectFile(b.path(library_path));
     application.exe.step.dependOn(&cargo.step);
@@ -97,10 +97,11 @@ pub fn build(b: *std.Build) void {
     }
     if (target.result.os.tag == .macos) application.exe.root_module.linkFramework("CoreBluetooth", .{});
     if (android) {
-        // GhostShare's Kotlin (the BLE beacon, src/android_beacon.zig) and AndroidManifest,
+        // HollerShare's Kotlin (the BLE beacon, share sheet handler) and AndroidManifest,
         // copied into the Gradle project that `zig build android-project` writes:
         const sources = b.addUpdateSourceFiles();
-        sources.addCopyFileToSource(b.path("src/android/QuickShareBeacon.kt"), "android/app/src/main/java/dev/ghostshare/QuickShareBeacon.kt");
+        sources.addCopyFileToSource(b.path("src/android/QuickShareBeacon.kt"), "android/app/src/main/java/dev/hollershare/QuickShareBeacon.kt");
+        sources.addCopyFileToSource(b.path("src/android/ShareActivity.kt"), "android/app/src/main/java/dev/hollershare/ShareActivity.kt");
         sources.addCopyFileToSource(b.path("src/android/AndroidManifest.xml"), "android/app/src/main/AndroidManifest.xml");
         b.getInstallStep().dependOn(&sources.step);
         if (b.top_level_steps.get("android-dev")) |dev| dev.step.dependOn(&sources.step);
@@ -117,7 +118,7 @@ pub fn build(b: *std.Build) void {
     const verify = b.addRunArtifact(verifier);
     if (b.args) |args| verify.addArgs(args);
     b.step("verify-updates", "Verify signed release manifests and update payloads").dependOn(&verify.step);
-    const tests = b.addSystemCommand(&.{ "cargo", "test", "--locked", "--package", "ghostshare-quickshare" });
+    const tests = b.addSystemCommand(&.{ "cargo", "test", "--locked", "--package", "hollershare-quickshare" });
     const test_step = b.step("test", "Test the Quick Share bridge and the settings");
     test_step.dependOn(&tests.step);
     const settings_tests = b.addTest(.{ .root_module = b.createModule(.{
