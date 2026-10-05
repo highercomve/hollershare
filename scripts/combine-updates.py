@@ -1,16 +1,20 @@
 #!/usr/bin/env python3
-"""Combine Oriel-signed manifests without altering their signed contents."""
+"""Use Oriel to combine signed entries into the release's single update feed."""
 import hashlib
 import json
 from pathlib import Path
+import subprocess
 
 root = Path("dist")
-manifests = [json.loads(path.read_text()) for path in sorted(root.glob("update-*.json"))]
+paths = sorted(root.glob("update-*.json"))
+manifests = [json.loads(path.read_text()) for path in paths]
 expected = {"x86_64-linux", "x86_64-linux-appimage", "aarch64-macos", "x86_64-windows", "aarch64-android", "x86_64-android"}
 if {item["target"] for item in manifests} != expected: raise SystemExit("Missing update platforms")
 if len({(item["app_id"], item["version"]) for item in manifests}) != 1: raise SystemExit("Inconsistent update identity or version")
-combined = {"app_id": manifests[0]["app_id"], "version": manifests[0]["version"], "platforms": {item["target"]: item for item in manifests}}
-(root / "latest.json").write_text(json.dumps(combined, indent=2) + "\n")
+subprocess.run(["oriel", "build", "combine-manifests", "--", *map(str, paths), "--out", str(root / "latest.json")], check=True)
+# These are build intermediates. Clients on every platform use latest.json.
+for path in paths:
+    path.unlink()
 with (root / "SHA256SUMS").open("w") as sums:
     for path in sorted(root.iterdir()):
         if path.is_file() and not path.name.startswith("SHA256SUMS"):

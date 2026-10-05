@@ -263,8 +263,8 @@ jobs:
         with:
           path: hollershare/dist
           merge-multiple: true
-      - run: python3 scripts/combine-updates.py
       - run: python3 scripts/setup-oriel.py
+      - run: python3 scripts/combine-updates.py
       - name: Verify every updater signature and payload
         run: oriel build verify-updates -- dist src/update-public-key.txt
       - uses: actions/upload-artifact@v4
@@ -281,6 +281,10 @@ jobs:
           python3 scripts/release-notes.py "$RELEASE_TAG" > release-notes.md
           if gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" dist/* --clobber
+            # Remove per-target manifests left by older release workflows.
+            gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name | select(startswith("update-") and endswith(".json"))' | while IFS= read -r asset; do
+              gh release delete-asset "$RELEASE_TAG" "$asset" --yes
+            done
             gh release edit "$RELEASE_TAG" --notes-file release-notes.md --title "HollerShare ${RELEASE_TAG#v}" --latest
           else
             gh release create "$RELEASE_TAG" dist/* --verify-tag --notes-file release-notes.md --title "HollerShare ${RELEASE_TAG#v}"
