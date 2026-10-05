@@ -2,6 +2,12 @@
 
 Notable changes in HollerShare releases.
 
+## Unreleased
+
+- Simplified the megaphone logo for small launcher sizes, with a full green
+  background and Android adaptive and themed icons. Updated the desktop,
+  tray, header and README artwork to match.
+
 ## [1.0.0] — 2026-10-05
 
 The first HollerShare release: native desktop and Android interfaces for

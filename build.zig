@@ -103,6 +103,20 @@ pub fn build(b: *std.Build) void {
         sources.addCopyFileToSource(b.path("src/android/QuickShareBeacon.kt"), "android/app/src/main/java/dev/hollershare/QuickShareBeacon.kt");
         sources.addCopyFileToSource(b.path("src/android/ShareActivity.kt"), "android/app/src/main/java/dev/hollershare/ShareActivity.kt");
         sources.addCopyFileToSource(b.path("src/android/AndroidManifest.xml"), "android/app/src/main/AndroidManifest.xml");
+        // Adaptive icons fill Android's launcher mask rather than being shrunk
+        // into its legacy white tile. Android 13+ also gets a themed icon.
+        const icons = b.addUpdateSourceFiles();
+        for ([_][]const u8{
+            "drawable/hollershare_foreground.xml",
+            "drawable/hollershare_monochrome.xml",
+            "values/hollershare_icon_colors.xml",
+            "mipmap-anydpi-v26/ic_launcher.xml",
+            "mipmap-anydpi-v33/ic_launcher.xml",
+        }) |resource| {
+            icons.addCopyFileToSource(b.path(b.fmt("src/android/res/{s}", .{resource})), b.fmt("android/app/src/main/res/{s}", .{resource}));
+        }
+        sources.step.dependOn(&icons.step);
+        if (b.top_level_steps.get("android-project")) |project| project.step.dependOn(&icons.step);
         b.getInstallStep().dependOn(&sources.step);
         if (b.top_level_steps.get("android-dev")) |dev| dev.step.dependOn(&sources.step);
     }
