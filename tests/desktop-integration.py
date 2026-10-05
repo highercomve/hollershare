@@ -103,7 +103,11 @@ def main():
         engine = mp.Process(target=worker, args=(child, folder / "sender", sender_port))
         engine.start(); child.close()
         try:
-            pump(visible)
+            def startup_visible():
+                if app.poll() is not None:
+                    raise AssertionError(f"HollerShare exited during startup ({app.returncode}):\n" + Path("artifacts/desktop.log").read_text())
+                return visible()
+            pump(startup_visible)
             pump(lambda: sender.poll())
             assert sender.recv()["ok"]
             window = command("xdotool", "search", "--onlyvisible", "--name", "^HollerShare$").splitlines()[0]
@@ -239,6 +243,9 @@ def main():
             pump(lambda: app.poll() is not None)
             assert app.returncode == 0
             print("PASS: background receiving, clickable notifications, folder picker cancellation, default consent, notification accept/decline/open file/open folder, tray visibility, tray send, clipboard notification copy, tray preview and native UI sending, live theme, quit with picker open")
+        except Exception:
+            print("HollerShare desktop log:\n" + Path("artifacts/desktop.log").read_text(), flush=True)
+            raise
         finally:
             if app.poll() is None:
                 app.kill(); app.wait(8)
