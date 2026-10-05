@@ -2,12 +2,6 @@
 
 Notable changes in HollerShare releases.
 
-## Unreleased
-
-- Replaced the megaphone with the Relay H logo for small launcher sizes, with a full green
-  background and Android adaptive and themed icons. Updated the desktop,
-  tray, header and README artwork to match.
-
 ## [1.0.0] — 2026-10-05
 
 The first HollerShare release: native desktop and Android interfaces for
@@ -16,8 +10,9 @@ transfers, command-line sharing and signed update packages.
 
 ### Added
 
-- HollerShare branding, a megaphone logo, launcher and tray icons, and header
-  marks that adapt to light and dark mode.
+- HollerShare branding with the Relay H logo, launcher and tray icons, and
+  header marks that adapt to light and dark mode. Android adaptive icons use
+  a full green background and support themed launchers.
 - Received text is copied to the clipboard as soon as an accepted transfer
   finishes, with a notification and an action to copy it again.
 - Drag and drop files to add them to a transfer, or text to open the clipboard
