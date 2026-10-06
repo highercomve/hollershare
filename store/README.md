@@ -80,3 +80,7 @@ Local validation passed: API 36 release compilation, Android target type checkin
 launching on Android 16, switching file/text modes, opening and closing the offline
 privacy policy, and displaying the Google Play update status. Transfer testing on
 physical devices and the Play pre-launch report remain part of internal testing.
+A desktop-to-emulator encrypted text transfer also passed after incoming consent;
+the received text was copied to Android's clipboard and pasted back into the composer.
+A 4,600-byte file transfer passed after consent, saved to the default Android folder,
+and matched the original byte for byte.
