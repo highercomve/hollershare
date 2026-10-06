@@ -69,8 +69,8 @@ mod tests {
         REMOVED.store(handle, Ordering::SeqCst);
     }
 
-    #[test]
-    fn registers_phone_name_and_unregisters_only_successful_handles() {
+    #[tokio::test]
+    async fn registers_phone_name_and_recovers_after_initial_registration_failure() {
         REMOVED.store(0, Ordering::SeqCst);
         assert!(Registration::new(*b"ABCD", 0).is_err());
         assert_eq!(REMOVED.load(Ordering::SeqCst), 0);
@@ -78,6 +78,23 @@ mod tests {
         assert_eq!(REMOVED.load(Ordering::SeqCst), 0);
         drop(registration);
         assert_eq!(REMOVED.load(Ordering::SeqCst), 42);
+
+        let (visibility_tx, visibility_rx) = watch::channel(Visibility::Visible);
+        let (_, ble_rx) = broadcast::channel(1);
+        let mut server = MDnsServer::new(
+            *b"ABCD",
+            0,
+            ble_rx,
+            Arc::new(Mutex::new(visibility_tx)),
+            visibility_rx,
+        )
+        .unwrap();
+        assert!(server.registration.is_none());
+        assert!(server.announce().await.is_err());
+        assert!(server.registration.is_none());
+        server.port = 54321;
+        server.announce().await.unwrap();
+        assert!(server.registration.is_some());
     }
 }
 
@@ -149,22 +166,17 @@ impl MDnsServer {
         port: u16,
         _ble_receiver: broadcast::Receiver<()>,
         visibility_sender: Arc<Mutex<watch::Sender<Visibility>>>,
-        mut visibility_receiver: watch::Receiver<Visibility>,
+        visibility_receiver: watch::Receiver<Visibility>,
     ) -> Result<Self, anyhow::Error> {
-        // Register before startup succeeds, so a registration failure is
-        // reported to the UI instead of claiming the phone is visible.
+        // Android may not answer registration while Wi-Fi is unavailable.
+        // Start the transfer engine independently; the announcement task
+        // retries registration when a network becomes available.
         let mut name_changes = subscribe_device_name();
         name_changes.mark_unchanged();
-        let visible = *visibility_receiver.borrow_and_update() != Visibility::Invisible;
-        let registration = if visible {
-            Some(Registration::new(endpoint_id, port)?)
-        } else {
-            None
-        };
         Ok(Self {
             endpoint_id,
             port,
-            registration,
+            registration: None,
             visibility_sender,
             visibility_receiver,
             name_changes,
@@ -185,6 +197,15 @@ impl MDnsServer {
     pub async fn run(&mut self, ctk: CancellationToken) -> Result<(), anyhow::Error> {
         let mut visibility = *self.visibility_receiver.borrow();
         let mut names = self.name_changes.clone();
+        if visibility != Visibility::Invisible {
+            if let Err(err) = self.announce().await {
+                warn!("Android NsdManager: announcement pending, will retry: {err}");
+            }
+        }
+        let mut retry = interval_at(
+            Instant::now() + Duration::from_secs(5),
+            Duration::from_secs(5),
+        );
         let mut interval = interval_at(
             Instant::now() + Duration::from_secs(60),
             Duration::from_secs(60),
@@ -213,13 +234,14 @@ impl MDnsServer {
                         }
                     }
                 }
+                _ = retry.tick(), if visibility != Visibility::Invisible && self.registration.is_none() => {
+                    if let Err(err) = self.announce().await {
+                        warn!("Android NsdManager: announcement pending, will retry: {err}");
+                    }
+                }
                 _ = interval.tick() => {
                     if visibility == Visibility::Temporarily {
                         let _ = self.visibility_sender.lock().unwrap().send(Visibility::Invisible);
-                    } else if visibility == Visibility::Visible && self.registration.is_none() {
-                        if let Err(err) = self.announce().await {
-                            error!("Android NsdManager: retry failed: {err}");
-                        }
                     }
                 }
             }
