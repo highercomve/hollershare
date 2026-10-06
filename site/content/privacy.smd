@@ -1,10 +1,10 @@
 ---
 .title = "Privacy policy",
 .description = "How HollerShare handles files, text and device information.",
-.date = .date("2026-10-05T00:00:00"),
+.date = .date("2026-10-06T00:00:00"),
 .layout = "page.shtml",
 ---
-Effective date: October 5, 2026.
+Effective date: October 6, 2026.
 
 # Who provides HollerShare
 
@@ -18,7 +18,9 @@ Incoming transfers require your acceptance. After you accept a text transfer, Ho
 
 # Nearby discovery and permissions
 
-When visibility and discovery are enabled, nearby devices can receive your advertised device name, device type, discovery identifiers and network address. The default name may be your system's device name; you can change it in Settings. Discovery uses local-network announcements and, where available, Bluetooth.
+When visibility and discovery are enabled, nearby devices can receive your advertised device name, device type, discovery identifiers and network address. The default name may be your system's device name; you can change it in Settings. Discovery uses local-network announcements and, where available, Bluetooth. These discovery announcements are not encrypted and can be observed by other nearby devices before you accept a transfer. They are separate from the encrypted file and text transfer channel.
+
+HollerShare sends and receives this discovery information to identify available peers and establish direct connections. It is used for the sharing function, not advertising, analytics or tracking by the maintainer. The maintainer does not operate a server that receives this information. You can stop advertising your device by turning visibility off, change the advertised name, and revoke nearby-device permissions in Android settings.
 
 HollerShare requests nearby Wi-Fi and Bluetooth permissions to find devices and advertise availability. Android 11 and earlier may require location permission for Bluetooth discovery; HollerShare does not use it to obtain your geographic location. Notifications announce incoming requests and completed transfers. File and folder pickers grant access to the content or destination you select. You can revoke these permissions in Android settings, which may limit sharing features.
 
@@ -40,7 +42,7 @@ The website is hosted by GitHub Pages. It uses no analytics, tracking cookies or
 
 # Security and your choices
 
-Transfers use Quick Share encryption in transit. Check the receiving device and incoming request before sharing. Encryption does not prevent a chosen recipient from keeping the content. Use the visibility control to stop advertising availability, choose a less identifying device name, revoke permissions, and delete received files or app data when no longer needed.
+File and text transfers use Quick Share encryption in transit between the participating devices. Nearby discovery announcements are not encrypted, so HollerShare does not claim that every item of information sent off your device is encrypted. Check the receiving device and incoming request before sharing. Encryption does not prevent a chosen recipient from keeping the content. Use the visibility control to stop advertising availability, choose a less identifying device name, revoke permissions, and delete received files or app data when no longer needed.
 
 # Changes to this policy
 
