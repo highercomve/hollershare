@@ -435,6 +435,11 @@ async function check_updates() {
   $("update-status").textContent = "Checking for updates…";
   try {
     const info = await call("update_info"); update_android = info.android; update_version = info.version;
+    if (info.play_store) {
+      $("update-status").textContent = "HollerShare " + update_version + " · Updates through Google Play";
+      $("update-check").hidden = true; $("update-install").hidden = true;
+      return;
+    }
     const update = await call("updater_check");
     $("update-status").textContent = update.available ? "HollerShare " + update.version + " is available" : "HollerShare " + update_version + " · Up to date";
     $("update-install").hidden = !update.available;
@@ -480,3 +485,12 @@ if (window.oriel) {
   setTimeout(check_updates, 1500);
   setInterval(() => { if ($("update-restart").hidden) check_updates(); }, 6 * 60 * 60 * 1000);
 }
+
+$("privacy-open").addEventListener("click", () => {
+  $("privacy-policy").hidden = false; $("privacy-open").setAttribute("aria-expanded", "true");
+  $("privacy-close").focus();
+});
+$("privacy-close").addEventListener("click", () => {
+  $("privacy-policy").hidden = true; $("privacy-open").setAttribute("aria-expanded", "false");
+  $("privacy-open").focus();
+});

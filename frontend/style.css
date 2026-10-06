@@ -114,3 +114,8 @@ footer { padding:15px 38px; border-top:1px solid var(--line); color:var(--muted)
 .path.folder.unavailable { border-color:var(--error-ink); }
 .path.folder.unavailable .folder-detail { color:var(--error-ink); }
 .transfer-detail .relocation-error { color:var(--error-ink); }
+
+.privacy-policy { margin-bottom:24px; }
+.privacy-policy h3 { margin-top:24px; font-size:16px; }
+.privacy-policy p { font-size:14px; line-height:1.65; }
+.privacy-policy a { color:inherit; text-decoration:underline; }

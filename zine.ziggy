@@ -1,0 +1,11 @@
+.zine_version = "0.14.0",
+.supermd = .{ .headings_h2 = true },
+.site = .simple(.{
+    .title = "HollerShare",
+    .host_url = "https://highercomve.github.io",
+    .content_dir_path = "site/content",
+    .layouts_dir_path = "site/layouts",
+    .assets_dir_path = "site/assets",
+    .url_path_prefix = "hollershare",
+    .static_assets = ["fonts"],
+}),

@@ -1,0 +1,31 @@
+---
+.title = "A little closer. A lot easier.",
+.description = "A quick guide to sharing files and text with HollerShare.",
+.date = .date("2026-10-05T00:00:00"),
+.layout = "page.shtml",
+---
+# Install HollerShare
+
+Download the package for your device from [GitHub releases](https://github.com/highercomve/hollershare/releases/latest). Android uses the signed APK. Google Play distribution is being prepared; there is no Play Store listing yet.
+
+On Android, you may need to allow your browser or file manager to install the APK. On Linux, choose DEB, RPM or AppImage. macOS packages support Apple silicon; Windows packages support 64-bit PCs.
+
+# Find the other device
+
+Connect both devices to the same local Wi-Fi network. Open HollerShare on each device, or enable receiving in Quick Share on Android. Allow nearby-device permissions when prompted. Bluetooth helps discovery; files travel over the network.
+
+Keep the receiving device visible. Guest networks and Wi-Fi client isolation can stop devices from finding or reaching each other. If automatic discovery fails, try the device IP address and port in HollerShare's address field.
+
+# Send a file or some text
+
+Choose files, then select a nearby device. On desktop you can also drop files into the file card. To send text, choose Clipboard text, paste or type your text, review it, then select a device.
+
+Accept the incoming request on the receiving device. Accepted text is copied to the receiving clipboard automatically. Files are saved to the receiving folder.
+
+# Choose where files land
+
+Open Settings to change your device name or received-files folder. On Android, choose a folder in the system picker to move completed transfers out of HollerShare's own storage. Keep access to that folder enabled.
+
+# Need help?
+
+[Report a problem or ask a question](https://github.com/highercomve/hollershare/issues). Do not include private file contents, clipboard text or sensitive device information in public issue reports. Read the [privacy policy](https://highercomve.github.io/hollershare/privacy/) for details about data handling.

@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head id="head">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#234b3a">
+<meta name="description" :attr.content="$page.description">
+<link rel="icon" href="$site.asset('brand/icon.svg').link()" type="image/svg+xml">
+<link rel="stylesheet" href="$site.asset('site.css').link()">
+<super>
+</head>
+<body id="body">
+<header class="wrap topbar"><a class="brand" href="$site.page('').link()"><img src="$site.asset('brand/icon.svg').link()" width="38" height="38" alt="">HollerShare</a><nav aria-label="Main navigation"><a href="$site.page('').link().suffix('#download')">Download</a><a href="$site.page('guide').link()">Guide</a><a href="$site.page('privacy').link()">Privacy</a></nav></header>
+<super>
+<footer class="wrap footer"><p>Good things travel.</p><div><a href="https://github.com/highercomve/hollershare">GitHub ↗</a><a href="$site.page('privacy').link()">Privacy policy</a><a href="https://github.com/highercomve/hollershare/issues">Support</a></div><small>Free and open source · Built with Oriel and Zine</small></footer>
+</body>
+</html>

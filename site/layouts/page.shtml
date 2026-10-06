@@ -1,0 +1,3 @@
+<extend template="base.shtml">
+<head id="head"><title :text="$page.title.suffix(' · HollerShare')"></title></head>
+<body id="body"><main class="wrap document"><a class="back" href="$site.page('').link()">← HollerShare</a><h1 :text="$page.title"></h1><p class="lede" :text="$page.description"></p><article class="prose" :html="$page.content()"></article></main></body>

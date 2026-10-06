@@ -17,10 +17,12 @@ const Image = oriel.updater.Commands(blk: {
     image.target = target ++ "-appimage";
     break :blk image;
 });
-pub fn info() struct { version: []const u8, android: bool } {
-    return .{ .version = config.version, .android = android };
+const Info = struct { version: []const u8, android: bool, play_store: bool };
+pub fn info() Info {
+    return .{ .version = config.version, .android = android, .play_store = android and config.play_store };
 }
 pub fn check(allocator: std.mem.Allocator, io: std.Io) !Raw.CheckResult {
+    if (android and config.play_store) return .{ .available = false, .version = config.version };
     if (try oriel.updater.runningAsAppImage(io, allocator)) {
         const result = try Image.updater_check(allocator, io);
         return .{ .available = result.available, .version = result.version };
@@ -28,6 +30,7 @@ pub fn check(allocator: std.mem.Allocator, io: std.Io) !Raw.CheckResult {
     return Raw.updater_check(allocator, io);
 }
 pub fn install(allocator: std.mem.Allocator, io: std.Io) !bool {
+    if (android and config.play_store) return oriel.ipc.fail("Updates are managed by Google Play", .{});
     if (android) return oriel.ipc.fail("Download the APK from the release page and install it with Android", .{});
     return Raw.updater_install(allocator, io);
 }

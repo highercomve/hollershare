@@ -1,0 +1,6 @@
+---
+.title = "HollerShare",
+.description = "Share files and text with nearby computers and Android devices.",
+.date = .date("2026-10-05T00:00:00"),
+.layout = "home.shtml",
+---

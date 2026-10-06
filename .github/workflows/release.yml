@@ -14,6 +14,10 @@ on:
         description: Publish signed packages to the current version's release (requires sign)
         type: boolean
         default: false
+      play_store:
+        description: Android build with updates managed by Google Play (do not publish to GitHub)
+        type: boolean
+        default: false
       platform:
         description: Build one platform for diagnostics, or all for a release
         type: choice
@@ -40,6 +44,10 @@ jobs:
         id: release
         working-directory: ${{ github.workspace }}
         run: |
+          if [ "${{ inputs.play_store }}" = "true" ] && [ "${{ inputs.publish }}" = "true" ]; then
+            echo "Play builds must use publish=false; upload their AAB through Play Console."
+            exit 1
+          fi
           if curl --fail --silent --show-error "https://api.github.com/repos/highercomve/Oriel/releases/tags/$ORIEL_REF" > /dev/null; then
             echo "available=true" >> "$GITHUB_OUTPUT"
           else
@@ -219,7 +227,7 @@ jobs:
           sudo apt-get install -y protobuf-compiler pkg-config libwayland-dev wayland-protocols
           rustup target add aarch64-linux-android x86_64-linux-android
           cargo install cargo-ndk --locked
-          sdkmanager 'ndk;28.2.13676358' 'platforms;android-35' 'build-tools;35.0.0'
+          sdkmanager 'ndk;28.2.13676358' 'platforms;android-36' 'build-tools;35.0.0'
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
       - run: python3 scripts/setup-oriel.py
       - run: oriel android init
@@ -236,11 +244,11 @@ jobs:
           export ORIEL_ANDROID_KEYSTORE="$RUNNER_TEMP/hollershare.keystore"
           trap 'rm -f "$ORIEL_ANDROID_KEYSTORE"' EXIT
           printf '%s' "$KEYSTORE" | base64 --decode > "$ORIEL_ANDROID_KEYSTORE"
-          oriel android build -Dnative_ui -Doptimize=ReleaseSafe
+          oriel android build -Dnative_ui -Doptimize=ReleaseSafe -Dplay-store=${{ inputs.play_store || false }}
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify android/app/build/outputs/apk/release/app-release.apk
       - name: Unsigned CI APK and AAB
         if: ${{ !(startsWith(github.ref, 'refs/tags/') || inputs.sign) }}
-        run: oriel android build -Dnative_ui -Doptimize=ReleaseSafe
+        run: oriel android build -Dnative_ui -Doptimize=ReleaseSafe -Dplay-store=${{ inputs.play_store || false }}
       - run: python3 scripts/collect-release.py android
       - name: Sign updater manifests
         if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.sign)

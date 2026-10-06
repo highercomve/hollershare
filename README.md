@@ -129,6 +129,15 @@ Required repository secrets:
 
 Signing material is supplied only to trusted tag or explicitly signed manual builds, decoded into runner temporary directories, and removed after use. Local environment variables are not committed. Windows signs both the app payload and the rebuilt Oriel NSIS installer. Linux packages include SHA-256 checksums.
 
+## Website and Google Play
+
+The [HollerShare website](https://highercomve.github.io/hollershare/) includes a guide and the
+[privacy policy](https://highercomve.github.io/hollershare/privacy/). The site uses Zine and deploys
+to GitHub Pages; see [`site/README.md`](site/README.md). Google Play distribution is being prepared.
+Listing text, store artwork, signed-build instructions and the closed-testing checklist are in
+[`store/`](store/README.md). Play builds use `-Dplay-store=true` and receive updates through Google Play.
+Android project generation applies API 36 automatically.
+
 ## Logo
 
 The Relay H connects two upright device shapes with a coral bridge and endpoints, drawn with bold shapes that stay readable at launcher size. Scalable SVG sources and launcher/tray PNGs are in [`assets/brand`](assets/brand/README.md). Android uses a full green adaptive icon with a monochrome variant for themed launchers. The header uses a raster mark that swaps palettes with the theme.

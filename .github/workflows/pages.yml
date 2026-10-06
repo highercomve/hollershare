@@ -1,0 +1,40 @@
+name: Website
+on:
+  push:
+    branches: [main]
+    paths: ['site/**', 'zine.ziggy', '.github/workflows/pages.yml', 'scripts/sync-privacy.py', 'frontend/index.html']
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check offline privacy policy
+        run: python3 scripts/sync-privacy.py --check
+      - name: Install Zine 0.14.0
+        run: |
+          curl --fail --location --silent --show-error -o "$RUNNER_TEMP/zine.tar.xz" https://github.com/kristoff-it/zine/releases/download/v0.14.0/x86_64-linux-musl.tar.xz
+          tar xJf "$RUNNER_TEMP/zine.tar.xz" -C "$RUNNER_TEMP"
+          chmod +x "$RUNNER_TEMP/zine"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - run: zine release
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public/
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

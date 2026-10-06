@@ -2,6 +2,12 @@
 
 Notable changes in HollerShare releases.
 
+## Unreleased
+
+- Added a Zine website, sharing guide and public privacy policy on GitHub Pages.
+- Added an offline privacy policy in Settings and Google Play listing artwork.
+- Android builds target API 36 with AGP 8.9.3. Google Play builds disable GitHub updates.
+
 ## [1.0.0] — 2026-10-05
 
 The first HollerShare release: native desktop and Android interfaces for
