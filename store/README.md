@@ -6,7 +6,7 @@ Privacy URL: https://highercomve.github.io/hollershare/privacy/.
 
 ## Build and signing
 
-Run `oriel android init`, then `oriel android build -Dnative_ui -Doptimize=ReleaseSafe -Dplay-store=true`.
+Run `oriel android init`, then `python3 scripts/configure-android-symbols.py`, then `oriel android build -Dnative_ui -Doptimize=ReleaseSafe -Dplay-store=true`.
 Oriel 0.9.3 generates API 36 and Android Gradle Plugin 8.9.3 projects directly.
 For an older generated project, use `oriel android init --force` after saving your edits.
 CI installs Gradle 8.14.3, Java 21 and Android platform 36.
@@ -20,7 +20,7 @@ after preserving customizations so the manifest metadata follows the new app ver
 
 For a signed CI build, dispatch **Build and release** on main with:
 `sign=true`, `publish=false`, `platform=android`, `play_store=true`.
-Download the `android` workflow artifact and upload `hollershare-android-app-release.aab` to Play Console.
+Download the `android` workflow artifact and upload `hollershare-android-app-release.aab` to Play Console. The AAB includes matching native debug symbols; the artifact also contains `hollershare-android-native-debug-symbols.zip` for manual upload in App Bundle Explorer. Symbols must come from the same build as the uploaded bundle; rebuilding an older source revision does not guarantee matching addresses.
 Do not upload an APK in place of the AAB. Play builds use the dedicated
 `PLAY_ANDROID_KEYSTORE_BASE64`, `PLAY_ANDROID_KEYSTORE_PASSWORD`, `PLAY_ANDROID_KEY_ALIAS`
 and `PLAY_ANDROID_KEY_PASSWORD` GitHub Actions secrets. Other builds use the original

@@ -15,6 +15,11 @@ for root in roots:
         if path.is_file() and path.suffix.lower() in {".deb", ".rpm", ".appimage", ".dmg", ".exe", ".apk", ".aab"}:
             shutil.copy2(path, output / f"hollershare-{platform}-{path.name}")
             count += 1
+if platform == "android":
+    symbols = Path("android/app/build/outputs/native-debug-symbols/release/native-debug-symbols.zip")
+    if not symbols.is_file():
+        raise SystemExit("Android release is missing native-debug-symbols.zip")
+    shutil.copy2(symbols, output / "hollershare-android-native-debug-symbols.zip")
 # Updater payloads preserve the executable or the complete signed app bundle.
 if platform in {"linux-x86_64", "windows-x86_64"}:
     suffix = ".exe" if platform.startswith("windows") else ""

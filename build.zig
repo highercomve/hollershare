@@ -73,6 +73,15 @@ pub fn build(b: *std.Build) void {
         // through isolation/hook.js first, in a frame the page can't reach.
         // .isolation = .{ .hook = b.path("isolation/hook.js") },
     });
+    // Gradle extracts the matching symbols before stripping the packaged JNI
+    // libraries. Preserve both Oriel and its helper executable until then.
+    if (android) {
+        for (b.getInstallStep().dependencies.items) |step| {
+            if (step.cast(std.Build.Step.InstallArtifact)) |install| {
+                install.artifact.root_module.strip = false;
+            }
+        }
+    }
     // Cargo resolves the host Rust toolchain. Cross compilation requires a
     // matching Rust target and target libraries; this build supports the host.
     const rust_target = b.option([]const u8, "rust-target", "Rust target triple (required for desktop cross compilation)");
