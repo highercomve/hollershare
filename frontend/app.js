@@ -489,8 +489,10 @@ if (window.oriel) {
 $("privacy-open").addEventListener("click", () => {
   $("privacy-policy").hidden = false; $("privacy-open").setAttribute("aria-expanded", "true");
   $("privacy-close").focus();
+  $("privacy-policy").scrollIntoView({ block: "start" });
 });
 $("privacy-close").addEventListener("click", () => {
   $("privacy-policy").hidden = true; $("privacy-open").setAttribute("aria-expanded", "false");
   $("privacy-open").focus();
+  $("privacy-open").scrollIntoView({ block: "nearest" });
 });
