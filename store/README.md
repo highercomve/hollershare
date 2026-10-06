@@ -65,3 +65,11 @@ Official references:
 - https://support.google.com/googleplay/android-developer/answer/10144311
 - https://support.google.com/googleplay/android-developer/answer/10787469
 - https://support.google.com/googleplay/android-developer/answer/9866151
+
+## Artwork
+
+- `assets/play-icon.png`: 512×512, 32-bit RGBA, full square artwork; Play applies its own mask.
+- `assets/feature-graphic.png`: 1024×500, RGB PNG.
+- SVG sources are next to both raster assets. Regenerate with `rsvg-convert`, then ensure
+  the icon uses RGBA and the feature graphic uses RGB.
+- Phone screenshots are captured from the actual app, without promotional overlays.

@@ -6,7 +6,7 @@
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .oriel = .{
-            .url = "git+https://github.com/highercomve/Oriel?ref=v0.9.3#0e1283af103e62546faaaf75e80c2918998df877",
+            .url = "git+https://github.com/highercomve/Oriel#0e1283af103e62546faaaf75e80c2918998df877",
             .hash = "oriel-0.9.3-K1NO5Sa5ngAlDLp5fueMlbi1VTY5KYX3MAuO3pyw741P",
         },
     },
