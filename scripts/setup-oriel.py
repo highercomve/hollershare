@@ -13,7 +13,7 @@ if expected:
     requested = subprocess.check_output(["git", "-C", str(framework), "rev-parse", expected + "^{commit}"], text=True).strip()
     if revision != requested:
         raise SystemExit("Oriel checkout does not match the requested CI revision")
-tag = expected or "v0.9.2"
+tag = expected or "v0.9.3"
 folder = Path(os.environ.get("RUNNER_TEMP", ".oriel-cli")).resolve() / "oriel-release-bin"
 env = dict(os.environ, ORIEL_VERSION=tag, ORIEL_INSTALL_DIR=str(folder))
 installer = "install.ps1" if os.name == "nt" else "install.sh"

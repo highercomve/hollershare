@@ -7,14 +7,16 @@ Privacy URL: https://highercomve.github.io/hollershare/privacy/.
 ## Build and signing
 
 Run `oriel android init`, then `oriel android build -Dnative_ui -Doptimize=ReleaseSafe -Dplay-store=true`.
-Android project generation applies API 36 and Android Gradle Plugin 8.9.3 through
-`scripts/configure-android.py`; the generated `android/` folder is not the source of truth.
+Oriel 0.9.3 generates API 36 and Android Gradle Plugin 8.9.3 projects directly.
+For an older generated project, use `oriel android init --force` after saving your edits.
 CI installs Gradle 8.14.3, Java 21 and Android platform 36.
 
 The Play option disables GitHub update checks and offers no external APK update action.
 It preserves package ID `dev.hollershare.App`, version name `1.0.0`, and version code `10000`.
-Each later Play upload needs a larger version code. For another test upload of 1.0.0,
-pass `-Dandroid-version-code=10001` (then increment it for later uploads).
+Each later Play upload needs a larger version code. Increase the app version before
+generating the project and building the next upload; Oriel derives the code from major.minor.patch.
+For example, 1.0.1 gives version code 10001. Regenerate edited Gradle files with `--force`
+after preserving customizations so the manifest metadata follows the new app version.
 
 For a signed CI build, dispatch **Build and release** on main with:
 `sign=true`, `publish=false`, `platform=android`, `play_store=true`.

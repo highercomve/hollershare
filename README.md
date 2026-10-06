@@ -12,7 +12,7 @@ Download packaged builds from [Releases](https://github.com/highercomve/hollersh
 
 Requirements: Zig 0.16.0, Rust/Cargo and `protoc`. Linux builds also need a C/C++ toolchain, `pkg-config`, GTK4 and D-Bus development libraries.
 
-Oriel v0.9.2 and the Zig libraries are declared in `build.zig.zon`, pinned by commit
+Oriel v0.9.3 and the Zig libraries are declared in `build.zig.zon`, pinned by commit
 and package hash. `zig build` fetches them automatically through Zig's package
 manager. Cargo fetches the Rust dependencies using `Cargo.lock`.
 
@@ -136,7 +136,7 @@ The [HollerShare website](https://highercomve.github.io/hollershare/) includes a
 to GitHub Pages; see [`site/README.md`](site/README.md). Google Play distribution is being prepared.
 Listing text, store artwork, signed-build instructions and the closed-testing checklist are in
 [`store/`](store/README.md). Play builds use `-Dplay-store=true` and receive updates through Google Play.
-Android project generation applies API 36 automatically.
+Oriel 0.9.3 generates Android projects targeting API 36.
 
 ## Logo
 

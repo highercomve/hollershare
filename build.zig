@@ -117,18 +117,7 @@ pub fn build(b: *std.Build) void {
             icons.addCopyFileToSource(b.path(b.fmt("src/android/res/{s}", .{resource})), b.fmt("android/app/src/main/res/{s}", .{resource}));
         }
         sources.step.dependOn(&icons.step);
-        if (b.top_level_steps.get("android-project")) |project| {
-            // Apply app-owned SDK and plugin versions after Oriel generates Gradle.
-            const configure = b.addSystemCommand(&.{ "python3", "scripts/configure-android.py", "--version", version });
-            configure.setCwd(b.path("."));
-            if (b.option(u32, "android-version-code", "Override the Android upload version code")) |code|
-                configure.addArgs(&.{ "--version-code", b.fmt("{d}", .{code}) });
-            for (project.step.dependencies.items) |dependency| configure.step.dependOn(dependency);
-            configure.has_side_effects = true;
-            project.step.dependOn(&configure.step);
-            project.step.dependOn(&icons.step);
-            sources.step.dependOn(&configure.step);
-        }
+        if (b.top_level_steps.get("android-project")) |project| project.step.dependOn(&icons.step);
         b.getInstallStep().dependOn(&sources.step);
         if (b.top_level_steps.get("android-dev")) |dev| dev.step.dependOn(&sources.step);
     }
