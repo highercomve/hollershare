@@ -2,6 +2,10 @@
 
 Notable changes in HollerShare releases.
 
+## Unreleased
+
+- Fixed sending drag-and-drop files: resolve native path objects into strings before submitting the transfer.
+
 ## [1.0.1] — 2026-10-06
 
 - Fixed Android startup without Wi-Fi: discovery registration retries automatically when a network becomes available, without blocking the sharing engine. Verified on Pixel 8 running Android 17.

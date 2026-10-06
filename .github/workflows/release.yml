@@ -62,7 +62,7 @@ jobs:
     steps:
       - name: System dependencies
         working-directory: ${{ github.workspace }}
-        run: pacman -Syu --noconfirm --needed git openssh ca-certificates curl pkgconf gtk4 webkitgtk-6.0 wayland wayland-protocols libxkbcommon libxtst libx11 dbus ttf-dejavu python python-gobject python-pillow rust protobuf base-devel go squashfs-tools xorg-server-xvfb xdotool xsel imagemagick
+        run: pacman -Syu --noconfirm --needed git openssh ca-certificates curl pkgconf gtk4 webkitgtk-6.0 wayland wayland-protocols libxkbcommon libxtst libx11 dbus ttf-dejavu python python-gobject python-pillow nodejs rust protobuf base-devel go squashfs-tools xorg-server-xvfb xdotool xsel imagemagick
       - uses: actions/checkout@v4
         with:
           path: hollershare
@@ -74,6 +74,8 @@ jobs:
       - run: python scripts/setup-oriel.py
       - name: Package tools
         run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.43.0
+      - name: Frontend dropped-file regression tests
+        run: node --test tests/frontend-drop.test.mjs
       - name: Rust and protocol tests
         run: cargo test --locked -p hollershare-quickshare -p rqs_lib
       - name: Oriel packages (native UI)
