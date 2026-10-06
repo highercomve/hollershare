@@ -73,3 +73,10 @@ Official references:
 - SVG sources are next to both raster assets. Regenerate with `rsvg-convert`, then ensure
   the icon uses RGBA and the feature graphic uses RGB.
 - Phone screenshots are captured from the actual app, without promotional overlays.
+  `assets/screenshots/01-share-files.png` and `02-share-text.png` are 1080×1920 captures
+  from the native Play build on an Android 16/API 36 emulator (360 dpi).
+
+Local validation passed: API 36 release compilation, Android target type checking,
+launching on Android 16, switching file/text modes, opening and closing the offline
+privacy policy, and displaying the Google Play update status. Transfer testing on
+physical devices and the Play pre-launch report remain part of internal testing.
