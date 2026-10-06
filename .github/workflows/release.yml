@@ -33,7 +33,7 @@ defaults:
     working-directory: hollershare
 env:
   ORIEL_REF: v0.9.3
-  HOLLERSHARE_VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '1.0.0' }}
+  HOLLERSHARE_VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '1.0.1' }}
 jobs:
   framework-ready:
     runs-on: ubuntu-latest

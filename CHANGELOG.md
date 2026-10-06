@@ -2,8 +2,11 @@
 
 Notable changes in HollerShare releases.
 
-## Unreleased
+## [1.0.1] — 2026-10-06
 
+- Fixed Android startup without Wi-Fi: discovery registration retries automatically when a network becomes available, without blocking the sharing engine. Verified on Pixel 8 running Android 17.
+- Included matching native debugging symbols in Android App Bundles and a separate symbols archive for diagnosing crashes and ANRs in Play Console.
+- Clarified local discovery metadata and encrypted transfers in the online and offline privacy policies.
 - Added a Zine website, sharing guide and public privacy policy on GitHub Pages.
 - Added an offline privacy policy in Settings and Google Play listing artwork.
 - Android builds target API 36 with AGP 8.9.3. Google Play builds disable GitHub updates.

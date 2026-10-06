@@ -1,6 +1,6 @@
 .{
     .name = .hollershare,
-    .version = "1.0.0",
+    .version = "1.0.1",
     // Derived from the package name; changing it has security and trust implications.
     .fingerprint = 0x2a2ffbe7947d5e82,
     .minimum_zig_version = "0.16.0",

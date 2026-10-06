@@ -7,7 +7,7 @@ pub fn build(b: *std.Build) void {
     const target = oriel.resolveTarget(b, b.standardTargetOptions(.{}));
     const optimize = b.standardOptimizeOption(.{});
     const android = target.result.abi == .android;
-    const version = std.mem.trimStart(u8, b.option([]const u8, "app-version", "Package version") orelse b.graph.environ_map.get("HOLLERSHARE_VERSION") orelse "1.0.0", "v");
+    const version = std.mem.trimStart(u8, b.option([]const u8, "app-version", "Package version") orelse b.graph.environ_map.get("HOLLERSHARE_VERSION") orelse "1.0.1", "v");
     _ = std.SemanticVersion.parse(version) catch @panic("Package version must be semantic version, e.g. 0.1.0");
     // Oriel's built-in modules and plugins. Switch on what the app uses:
     // anything left off is neither compiled nor linked.

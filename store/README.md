@@ -12,7 +12,7 @@ For an older generated project, use `oriel android init --force` after saving yo
 CI installs Gradle 8.14.3, Java 21 and Android platform 36.
 
 The Play option disables GitHub update checks and offers no external APK update action.
-It preserves package ID `dev.hollershare.App`, version name `1.0.0`, and version code `10000`.
+It preserves package ID `dev.hollershare.App`, version name `1.0.1`, and version code `10001`.
 Each later Play upload needs a larger version code. Increase the app version before
 generating the project and building the next upload; Oriel derives the code from major.minor.patch.
 For example, 1.0.1 gives version code 10001. Regenerate edited Gradle files with `--force`
