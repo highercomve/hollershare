@@ -21,12 +21,22 @@ after preserving customizations so the manifest metadata follows the new app ver
 For a signed CI build, dispatch **Build and release** on main with:
 `sign=true`, `publish=false`, `platform=android`, `play_store=true`.
 Download the `android` workflow artifact and upload `hollershare-android-app-release.aab` to Play Console.
-Do not upload an APK in place of the AAB. Signing credentials stay in existing GitHub Actions secrets.
+Do not upload an APK in place of the AAB. Play builds use the dedicated
+`PLAY_ANDROID_KEYSTORE_BASE64`, `PLAY_ANDROID_KEYSTORE_PASSWORD`, `PLAY_ANDROID_KEY_ALIAS`
+and `PLAY_ANDROID_KEY_PASSWORD` GitHub Actions secrets. Other builds use the original
+`ORIEL_ANDROID_*` secrets. CI rejects Android Debug certificates for Play builds.
 
-At initial Play App Signing enrollment, import the existing APK signing key if you want
-GitHub APKs and Play installs to use the same signing identity. Register a separate upload
-key afterwards. Configure that upload key for Play CI before future submissions; keep the
-GitHub APK signing key separate. Do not publish private keystores or passwords in this repository.
+The existing GitHub APK key has an Android Debug certificate and must not be used for
+Google Play. For the initial Play App Signing enrollment, let Google generate the app
+signing key and register the dedicated HollerShare upload certificate. The upload key
+signs AAB submissions; Google signs the installed APKs. Existing GitHub APK installations
+will need to be uninstalled before installing the Play version because their signing
+identities differ. Back up received files before uninstalling.
+To distribute matching APKs elsewhere later, download Google's signed universal APK
+from Play Console. Keep the upload key and password backed up securely outside Git.
+Do not publish private keystores or passwords in this repository.
+The public upload certificate is `play-upload-certificate.pem`; its SHA-256 fingerprint
+is `64febc106d0538116332c0d28751c95a6460897e3ee4d5072e5eaa18a18ebcd2`.
 
 ## Console setup
 

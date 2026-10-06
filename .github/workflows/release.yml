@@ -238,7 +238,17 @@ jobs:
           ORIEL_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ORIEL_ANDROID_KEYSTORE_PASSWORD }}
           ORIEL_ANDROID_KEY_ALIAS: ${{ secrets.ORIEL_ANDROID_KEY_ALIAS }}
           ORIEL_ANDROID_KEY_PASSWORD: ${{ secrets.ORIEL_ANDROID_KEY_PASSWORD }}
+          PLAY_KEYSTORE: ${{ secrets.PLAY_ANDROID_KEYSTORE_BASE64 }}
+          PLAY_KEYSTORE_PASSWORD: ${{ secrets.PLAY_ANDROID_KEYSTORE_PASSWORD }}
+          PLAY_KEY_ALIAS: ${{ secrets.PLAY_ANDROID_KEY_ALIAS }}
+          PLAY_KEY_PASSWORD: ${{ secrets.PLAY_ANDROID_KEY_PASSWORD }}
         run: |
+          if [ "${{ inputs.play_store }}" = "true" ]; then
+            KEYSTORE="$PLAY_KEYSTORE"
+            export ORIEL_ANDROID_KEYSTORE_PASSWORD="$PLAY_KEYSTORE_PASSWORD"
+            export ORIEL_ANDROID_KEY_ALIAS="$PLAY_KEY_ALIAS"
+            export ORIEL_ANDROID_KEY_PASSWORD="$PLAY_KEY_PASSWORD"
+          fi
           test -n "$KEYSTORE" && test -n "$ORIEL_ANDROID_KEYSTORE_PASSWORD" && test -n "$ORIEL_ANDROID_KEY_ALIAS" && test -n "$ORIEL_ANDROID_KEY_PASSWORD"
           umask 077
           export ORIEL_ANDROID_KEYSTORE="$RUNNER_TEMP/hollershare.keystore"
@@ -246,6 +256,13 @@ jobs:
           printf '%s' "$KEYSTORE" | base64 --decode > "$ORIEL_ANDROID_KEYSTORE"
           oriel android build -Dnative_ui -Doptimize=ReleaseSafe -Dplay-store=${{ inputs.play_store || false }}
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify android/app/build/outputs/apk/release/app-release.apk
+          if [ "${{ inputs.play_store }}" = "true" ]; then
+            "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs android/app/build/outputs/apk/release/app-release.apk > "$RUNNER_TEMP/play-certificate.txt"
+            if grep -q 'CN=Android Debug' "$RUNNER_TEMP/play-certificate.txt"; then
+              echo "Google Play builds require a production upload certificate."
+              exit 1
+            fi
+          fi
       - name: Unsigned CI APK and AAB
         if: ${{ !(startsWith(github.ref, 'refs/tags/') || inputs.sign) }}
         run: oriel android build -Dnative_ui -Doptimize=ReleaseSafe -Dplay-store=${{ inputs.play_store || false }}
