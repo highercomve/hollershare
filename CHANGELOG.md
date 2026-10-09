@@ -2,8 +2,9 @@
 
 Notable changes in HollerShare releases.
 
-## Unreleased
+## [1.0.2] — 2026-10-09
 
+- Built on Oriel 0.9.11 (from 0.9.3), with its memory-safety, Windows and Linux fixes.
 - Fixed sending drag-and-drop files: resolve native path objects into strings before submitting the transfer.
 
 ## [1.0.1] — 2026-10-06
