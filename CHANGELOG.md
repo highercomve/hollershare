@@ -2,6 +2,10 @@
 
 Notable changes in HollerShare releases.
 
+## [Unreleased]
+
+- Built on Oriel 0.9.15 (from 0.9.11). Fixed Android discovery on phones older than Android 14: a device lookup the system never answered blocked the lookups after it, and a failed one was never retried, so other computers and phones could stay missing. Lookups now time out after 10 seconds and failed ones are retried.
+
 ## [1.0.2] — 2026-10-09
 
 - Built on Oriel 0.9.11 (from 0.9.3), with its memory-safety, Windows and Linux fixes.
