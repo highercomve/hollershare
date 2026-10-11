@@ -2,7 +2,7 @@
 
 Notable changes in HollerShare releases.
 
-## [Unreleased]
+## [1.0.4] — 2026-10-11
 
 Fixes from a code review against the NASA/JPL "Power of 10" rules.
 
