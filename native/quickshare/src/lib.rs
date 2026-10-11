@@ -323,7 +323,8 @@ async fn handle(
                 .send(control_message(id, ChannelAction::CancelTransfer))
                 .map_err(|e| e.to_string())?;
         }
-        Request::Stop => unreachable!(),
+        // Answered by `run` before `handle` is called; never a panic here.
+        Request::Stop => return Err("Use hollershare_stop".into()),
     }
     Ok(json!(true))
 }
@@ -531,9 +532,13 @@ pub unsafe extern "C" fn hollershare_start(directory: *const c_char) -> *mut c_c
                 Err(e)
             }
             Err(e) => {
+                // No answer in 10 s: the engine may be stuck starting (a
+                // hung socket or discovery). Joining could wait forever with
+                // ENGINE locked, so the thread is left to finish on its own;
+                // dropping `tx` makes `run` return once it gets going.
                 drop(tx);
-                let _ = thread.join();
-                Err(e.to_string())
+                drop(thread);
+                Err(format!("Quick Share engine did not start: {e}"))
             }
         }
     })
@@ -549,14 +554,28 @@ pub unsafe extern "C" fn hollershare_request(request: *const c_char) -> *mut c_c
         if matches!(request, Request::Stop) {
             return Err("Use hollershare_stop".into());
         }
-        let engine = ENGINE
-            .get_or_init(|| Mutex::new(None))
-            .lock()
-            .map_err(|e| e.to_string())?;
-        let engine = engine.as_ref().ok_or("Quick Share engine is not running")?;
+        // Only the sender is taken under the lock: waiting for the answer
+        // with ENGINE held would queue every other caller, `stop` included.
+        let sender = {
+            let mut engine = ENGINE
+                .get_or_init(|| Mutex::new(None))
+                .lock()
+                .map_err(|e| e.to_string())?;
+            let running = engine.as_ref().ok_or("Quick Share engine is not running")?;
+            if running.thread.is_finished() {
+                // The engine thread ended on its own (a panic in the
+                // protocol library): forget it so `start` can run again.
+                if let Some(dead) = engine.take() {
+                    if dead.thread.join().is_err() {
+                        eprintln!("hollershare: Quick Share engine thread panicked");
+                    }
+                }
+                return Err("Quick Share engine stopped; start it again".into());
+            }
+            running.tx.clone()
+        };
         let (tx, rx) = sync_channel::channel();
-        engine
-            .tx
+        sender
             .try_send(Envelope { request, reply: tx })
             .map_err(|e| e.to_string())?;
         rx.recv_timeout(Duration::from_secs(5))
@@ -618,7 +637,9 @@ pub extern "C" fn hollershare_stop() {
             reply: tx,
         });
         drop(engine.tx);
-        let _ = engine.thread.join();
+        if engine.thread.join().is_err() {
+            eprintln!("hollershare: Quick Share engine thread panicked");
+        }
     }
 }
 /// Free exactly once a non-null pointer returned by start/request.

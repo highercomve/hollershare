@@ -118,6 +118,9 @@ fn getClassLoader(env: *jni.Env, cls: jni.jclass) ?jni.jobject {
     };
     const loader = f.CallObjectMethodA(env, cls, get_loader, null);
     if (env.clearException()) return null;
+    // jobject is itself optional: a null one must not come back wrapped
+    // in a non-null `?jobject` (callers' `orelse` would not fire).
+    if (loader == null) return null;
     return loader;
 }
 

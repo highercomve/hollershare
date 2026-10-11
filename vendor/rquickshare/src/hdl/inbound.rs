@@ -4,18 +4,20 @@ use std::time::Duration;
 use anyhow::anyhow;
 use bytes::Bytes;
 use hmac::{Hmac, Mac};
-use libaes::{Cipher, AES_256_KEY_LEN};
 use p256::ecdh::diffie_hellman;
 use p256::elliptic_curve::sec1::{FromEncodedPoint, ToEncodedPoint};
 use p256::{EncodedPoint, PublicKey};
 use prost::Message;
 use rand::Rng;
 use sha2::{Digest, Sha256, Sha512};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::AsyncReadExt;
 use tokio::net::TcpStream;
 use tokio::sync::broadcast::{Receiver, Sender};
 
-use super::{InnerState, State};
+use super::{
+    aes_cbc_decrypt, aes_cbc_encrypt, append_bytes_chunk, next_seq, write_all_timeout,
+    InnerState, State, IDLE_TIMEOUT, SANE_FRAME_LENGTH,
+};
 use crate::channel::{ChannelAction, ChannelDirection, ChannelMessage};
 use crate::hdl::info::{InternalFileInfo, TransferMetadata};
 use crate::hdl::{TextPayloadInfo, TextPayloadType};
@@ -41,7 +43,6 @@ use crate::{location_nearby_connections, sharing_nearby};
 
 type HmacSha256 = Hmac<Sha256>;
 
-const SANE_FRAME_LENGTH: i32 = 5 * 1024 * 1024;
 const SANITY_DURATION: Duration = Duration::from_micros(10);
 
 #[derive(Debug)]
@@ -49,6 +50,8 @@ pub struct InboundRequest {
     socket: TcpStream,
     header_bytes: [u8; 4],
     header_length: usize,
+    // Last time the peer made progress; drives the idle timeout.
+    last_activity: tokio::time::Instant,
     pub state: InnerState,
     sender: Sender<ChannelMessage>,
     receiver: Receiver<ChannelMessage>,
@@ -62,12 +65,15 @@ impl InboundRequest {
             socket,
             header_bytes: [0; 4],
             header_length: 0,
+            last_activity: tokio::time::Instant::now(),
             state: InnerState {
                 id,
                 server_seq: 0,
                 client_seq: 0,
                 state: State::Initial,
-                encryption_done: true,
+                // Becomes true once UKEY2 keys exist (finalize_key_exchange);
+                // until then disconnection/keepalive frames go out in plaintext.
+                encryption_done: false,
                 ..Default::default()
             },
             sender,
@@ -79,7 +85,17 @@ impl InboundRequest {
         // Buffer for the 4-byte length
         let mut length_buf = [0u8; 4];
 
+        // No idle timeout while the local user is deciding.
+        let waiting_for_user = self.state.state == State::WaitingForUserConsent;
+        if waiting_for_user {
+            self.last_activity = tokio::time::Instant::now();
+        }
+        let idle_deadline = self.last_activity + IDLE_TIMEOUT;
+
         tokio::select! {
+            _ = tokio::time::sleep_until(idle_deadline), if !waiting_for_user => {
+                return Err(anyhow!("Peer idle for more than {}s", IDLE_TIMEOUT.as_secs()));
+            }
             i = self.receiver.recv() => {
                 match i {
                     Ok(channel_msg) => {
@@ -132,6 +148,7 @@ impl InboundRequest {
             h = self.socket.read(&mut length_buf[self.header_length..]) => {
                 let count = h?;
                 if count == 0 { return Err(anyhow!("Connection closed")); }
+                self.last_activity = tokio::time::Instant::now();
                 self.header_bytes[self.header_length..self.header_length + count]
                     .copy_from_slice(&length_buf[self.header_length..self.header_length + count]);
                 self.header_length += count;
@@ -139,6 +156,7 @@ impl InboundRequest {
                     let header = self.header_bytes;
                     self.header_length = 0;
                     tokio::time::timeout(Duration::from_secs(30), self._handle(header)).await??;
+                    self.last_activity = tokio::time::Instant::now();
                 }
             }
         }
@@ -478,7 +496,12 @@ impl InboundRequest {
         &mut self,
         smsg: &SecureMessage,
     ) -> Result<(), anyhow::Error> {
-        let mut hmac = HmacSha256::new_from_slice(self.state.recv_hmac_key.as_ref().unwrap())?;
+        let recv_hmac_key = self
+            .state
+            .recv_hmac_key
+            .as_ref()
+            .ok_or_else(|| anyhow!("Missing receive HMAC key"))?;
+        let mut hmac = HmacSha256::new_from_slice(recv_hmac_key)?;
         hmac.update(&smsg.header_and_body);
         hmac.verify_slice(&smsg.signature)
             .map_err(|_| anyhow!("hmac!=signature"))?;
@@ -486,15 +509,16 @@ impl InboundRequest {
         let header_and_body = HeaderAndBody::decode(&*smsg.header_and_body)?;
 
         let msg_data = header_and_body.body;
-        let key = self.state.decrypt_key.as_ref().unwrap();
-
-        let mut cipher = Cipher::new_256(key[..AES_256_KEY_LEN].try_into()?);
-        cipher.set_auto_padding(true);
-        let decrypted = cipher.cbc_decrypt(header_and_body.header.iv(), &msg_data);
+        let key = self
+            .state
+            .decrypt_key
+            .as_ref()
+            .ok_or_else(|| anyhow!("Missing decryption key"))?;
+        let decrypted = aes_cbc_decrypt(key, header_and_body.header.iv(), &msg_data)?;
 
         let d2d_msg = DeviceToDeviceMessage::decode(&*decrypted)?;
 
-        let seq = self.get_client_seq_inc().await;
+        let seq = self.get_client_seq_inc()?;
         if d2d_msg.sequence_number() != seq {
             return Err(anyhow!(
                 "Error d2d_msg.sequence_number invalid ({} vs {})",
@@ -530,37 +554,22 @@ impl InboundRequest {
                         info!("Processing PayloadType::Bytes");
                         let payload_id = header.id();
 
-                        if header.total_size() < 0 || header.total_size() > SANE_FRAME_LENGTH.into() {
-                            self.state.payload_buffers.remove(&payload_id);
-                            return Err(anyhow!(
-                                "Payload too large: {} bytes",
-                                header.total_size()
-                            ));
-                        }
-
-                        self.state
-                            .payload_buffers
-                            .entry(payload_id)
-                            .or_insert_with(|| Vec::with_capacity(header.total_size() as usize));
-
-                        // Get the current length of the buffer, if it exists, without holding a mutable borrow.
-                        let buffer_len = self.state.payload_buffers.get(&payload_id).unwrap().len();
-                        if chunk.offset() != buffer_len as i64 {
-                            self.state.payload_buffers.remove(&payload_id);
-                            return Err(anyhow!(
-                                "Unexpected chunk offset: {}, expected: {}",
-                                chunk.offset(),
-                                buffer_len
-                            ));
-                        }
-
-                        let buffer = self.state.payload_buffers.get_mut(&payload_id).unwrap();
-                        if let Some(body) = &chunk.body {
-                            buffer.extend(body);
-                        }
+                        append_bytes_chunk(
+                            &mut self.state.payload_buffers,
+                            payload_id,
+                            header.total_size(),
+                            chunk.offset(),
+                            chunk.body.as_deref(),
+                        )?;
 
                         if (chunk.flags() & 1) == 1 {
                             debug!("Chunk flags & 1 == 1 ?? End of data ??");
+                            // Final chunk: take ownership so the entry is pruned.
+                            let buffer = self
+                                .state
+                                .payload_buffers
+                                .remove(&payload_id)
+                                .unwrap_or_default();
 
                             if self.state.text_payload.is_some()
                                 && self.state.text_payload.as_ref().unwrap().get_i64_value()
@@ -638,6 +647,9 @@ impl InboundRequest {
                     payload_header::PayloadType::File => {
                         info!("Processing PayloadType::File");
                         let payload_id = header.id();
+                        if self.state.state != State::ReceivingFiles {
+                            return Err(anyhow!("File data received before approval"));
+                        }
 
                         let file_internal = self
                             .state
@@ -664,7 +676,10 @@ impl InboundRequest {
                         }
 
                         if !chunk.body().is_empty() {
-                            let file = file_internal.file.as_mut().unwrap();
+                            let file = file_internal
+                                .file
+                                .as_mut()
+                                .ok_or_else(|| anyhow!("File not accepted"))?;
                             file.seek(SeekFrom::Start(current_offset as u64))?;
                             file.write_all(chunk.body())?;
                             file_internal.bytes_transferred += chunk_size as i64;
@@ -848,13 +863,7 @@ impl InboundRequest {
             }
             for file in &introduction.file_metadata {
                 let name = file.name();
-                if name.is_empty()
-                    || name.len() > 255
-                    || name == "."
-                    || name == ".."
-                    || name
-                        .chars()
-                        .any(|c| c.is_control() || c == '/' || c == '\\' || c == ':')
+                if !is_safe_file_name(name)
                     || file.size() < 0
                     || file.size() > (1_i64 << 40)
                     || self
@@ -1254,17 +1263,19 @@ impl InboundRequest {
 
     async fn encrypt_and_send(&mut self, frame: &OfflineFrame) -> Result<(), anyhow::Error> {
         let d2d_msg = DeviceToDeviceMessage {
-            sequence_number: Some(self.get_server_seq_inc().await),
+            sequence_number: Some(self.get_server_seq_inc()?),
             message: Some(frame.encode_to_vec()),
         };
 
-        let key = self.state.encrypt_key.as_ref().unwrap();
+        let key = self
+            .state
+            .encrypt_key
+            .as_ref()
+            .ok_or_else(|| anyhow!("Missing encryption key"))?;
         let msg_data = d2d_msg.encode_to_vec();
         let iv = gen_random(16);
 
-        let mut cipher = Cipher::new_256(&key[..AES_256_KEY_LEN].try_into().unwrap());
-        cipher.set_auto_padding(true);
-        let encrypted = cipher.cbc_encrypt(&iv, &msg_data);
+        let encrypted = aes_cbc_encrypt(key, &iv, &msg_data)?;
 
         let hb = HeaderAndBody {
             body: encrypted,
@@ -1283,7 +1294,12 @@ impl InboundRequest {
             },
         };
 
-        let mut hmac = HmacSha256::new_from_slice(self.state.send_hmac_key.as_ref().unwrap())?;
+        let send_hmac_key = self
+            .state
+            .send_hmac_key
+            .as_ref()
+            .ok_or_else(|| anyhow!("Missing send HMAC key"))?;
+        let mut hmac = HmacSha256::new_from_slice(send_hmac_key)?;
         hmac.update(&hb.encode_to_vec());
         let result = hmac.finalize();
 
@@ -1329,34 +1345,15 @@ impl InboundRequest {
         prefixed_length.extend_from_slice(&length_bytes);
         prefixed_length.extend_from_slice(&data);
 
-        self.socket.write_all(&prefixed_length).await?;
-        self.socket.flush().await?;
-
-        Ok(())
+        write_all_timeout(&mut self.socket, &prefixed_length).await
     }
 
-    async fn get_server_seq_inc(&mut self) -> i32 {
-        self.update_state(
-            |e| {
-                e.server_seq += 1;
-            },
-            false,
-        )
-        .await;
-
-        self.state.server_seq
+    fn get_server_seq_inc(&mut self) -> Result<i32, anyhow::Error> {
+        next_seq(&mut self.state.server_seq)
     }
 
-    async fn get_client_seq_inc(&mut self) -> i32 {
-        self.update_state(
-            |e| {
-                e.client_seq += 1;
-            },
-            false,
-        )
-        .await;
-
-        self.state.client_seq
+    fn get_client_seq_inc(&mut self) -> Result<i32, anyhow::Error> {
+        next_seq(&mut self.state.client_seq)
     }
 
     async fn update_state<F>(&mut self, f: F, inform: bool)
@@ -1393,6 +1390,127 @@ impl Drop for InboundRequest {
                 drop(handle);
                 let _ = std::fs::remove_file(&file.file_url);
             }
+        }
+    }
+}
+
+/// Windows device names that cannot be used as a file name, with or without
+/// an extension.
+const WINDOWS_RESERVED_NAMES: [&str; 24] = [
+    "CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$", "COM1", "COM2", "COM3", "COM4", "COM5",
+    "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7",
+    "LPT8", "LPT9",
+];
+
+/// Unicode format (Cf) characters that can hide or reorder parts of a name
+/// (bidi overrides and isolates, invisible separators, BOM, tags). ZWJ and
+/// ZWNJ are allowed since emoji sequences and several scripts need them.
+fn is_disallowed_format_char(c: char) -> bool {
+    matches!(
+        c,
+        '\u{00AD}'
+            | '\u{0600}'..='\u{0605}'
+            | '\u{061C}'
+            | '\u{06DD}'
+            | '\u{070F}'
+            | '\u{0890}'..='\u{0891}'
+            | '\u{08E2}'
+            | '\u{180E}'
+            | '\u{200B}'
+            | '\u{200E}'..='\u{200F}'
+            | '\u{202A}'..='\u{202E}'
+            | '\u{2060}'..='\u{2064}'
+            | '\u{2066}'..='\u{206F}'
+            | '\u{FEFF}'
+            | '\u{FFF9}'..='\u{FFFB}'
+            | '\u{110BD}'
+            | '\u{110CD}'
+            | '\u{13430}'..='\u{1343F}'
+            | '\u{1BCA0}'..='\u{1BCA3}'
+            | '\u{1D173}'..='\u{1D17A}'
+            | '\u{E0001}'
+            | '\u{E0020}'..='\u{E007F}'
+    )
+}
+
+/// Whether a peer-supplied file name is safe to create inside the download
+/// directory on any supported platform.
+pub(crate) fn is_safe_file_name(name: &str) -> bool {
+    if name.is_empty() || name.len() > 255 || name == "." || name == ".." {
+        return false;
+    }
+    if name.chars().any(|c| {
+        c.is_control() || c == '/' || c == '\\' || c == ':' || is_disallowed_format_char(c)
+    }) {
+        return false;
+    }
+    // Windows silently strips these, so "a.txt." and "a.txt " alias "a.txt".
+    if name.ends_with('.') || name.ends_with(' ') {
+        return false;
+    }
+    // "CON", "con.txt", "Nul .tar.gz": Windows looks at the part before the
+    // first dot, ignoring trailing spaces.
+    let stem = name.split('.').next().unwrap_or(name).trim_end_matches(' ');
+    if WINDOWS_RESERVED_NAMES
+        .iter()
+        .any(|r| stem.eq_ignore_ascii_case(r))
+    {
+        return false;
+    }
+    true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_safe_file_name;
+
+    #[test]
+    fn file_name_sanitizer() {
+        for ok in [
+            "photo.jpg",
+            "my file (1).tar.gz",
+            ".hidden",
+            "CONSOLE.txt",
+            "com10.log",
+            "lpt.txt",
+            "résumé.pdf",
+            "\u{1F468}\u{200D}\u{1F469}.png",
+        ] {
+            assert!(is_safe_file_name(ok), "{ok:?} should be accepted");
+        }
+        let long = "a".repeat(256);
+        for bad in [
+            "",
+            ".",
+            "..",
+            long.as_str(),
+            "a/b",
+            "a\\b",
+            "c:x",
+            "a\nb",
+            "CON",
+            "con",
+            "Con.txt",
+            "nul.tar.gz",
+            "COM1",
+            "lpt9.doc",
+            "aux .txt",
+            "PRN",
+            "conin$",
+            "name.",
+            "name ",
+            "name.txt...",
+            "evil\u{202E}gpj.exe",
+            "a\u{200E}b",
+            "a\u{200F}b",
+            "a\u{2066}b",
+            "a\u{2069}b",
+            "a\u{202A}b",
+            "a\u{FEFF}b",
+            "a\u{200B}b",
+            "a\u{E0041}b",
+        ] {
+            assert!(!is_safe_file_name(bad), "{bad:?} should be rejected");
         }
     }
 }

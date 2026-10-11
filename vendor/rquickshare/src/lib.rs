@@ -130,6 +130,7 @@ impl RQS {
             tcp_listener,
             self.message_sender.clone(),
             send_channel.1,
+            tracker.clone(),
         )?;
         let ctk = ctoken.clone();
         tracker.spawn(async move { server.run(ctk).await });
