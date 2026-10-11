@@ -590,8 +590,15 @@ pub const Commands = struct {
         defer allocator.free(response);
         const parsed = try std.json.parseFromSlice(std.json.Value, allocator, response, .{});
         defer parsed.deinit();
+        // The engine's answer is checked, not assumed: a malformed one must
+        // not panic the restart.
+        if (parsed.value != .object) return error.QuickShareUnavailable;
         const data = parsed.value.object.get("data") orelse return error.QuickShareUnavailable;
-        for (data.object.get("transfers").?.array.items) |transfer| {
+        if (data != .object) return error.QuickShareUnavailable;
+        const transfers = data.object.get("transfers") orelse return error.QuickShareUnavailable;
+        if (transfers != .array) return error.QuickShareUnavailable;
+        for (transfers.array.items) |transfer| {
+            if (transfer != .object) return error.QuickShareUnavailable;
             const state = transfer.object.get("state") orelse continue;
             if (state != .string) return error.TransfersActive;
             const terminal = [_][]const u8{ "Finished", "Rejected", "Cancelled", "Disconnected" };

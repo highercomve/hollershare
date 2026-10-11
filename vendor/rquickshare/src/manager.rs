@@ -1,8 +1,13 @@
+use std::sync::Arc;
+use std::time::Duration;
+
 use serde::{Deserialize, Serialize};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::broadcast::Sender;
 use tokio::sync::mpsc::Receiver;
+use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
+use tokio_util::task::TaskTracker;
 use ts_rs::TS;
 
 use crate::channel::{ChannelDirection, ChannelMessage};
@@ -11,6 +16,10 @@ use crate::hdl::{InboundRequest, OutboundPayload, OutboundRequest, State};
 use crate::utils::RemoteDeviceInfo;
 
 const INNER_NAME: &str = "TcpServer";
+/// Most inbound connections handled at once; extra sockets are dropped.
+const MAX_INBOUND_CONNECTIONS: usize = 16;
+/// Back-off after a failed accept() (e.g. EMFILE) so the loop doesn't spin.
+const ACCEPT_ERROR_BACKOFF: Duration = Duration::from_millis(100);
 
 #[derive(Debug, Deserialize, Serialize, TS)]
 #[ts(export)]
@@ -26,6 +35,8 @@ pub struct TcpServer {
     tcp_listener: TcpListener,
     sender: Sender<ChannelMessage>,
     connect_receiver: Receiver<SendInfo>,
+    tracker: TaskTracker,
+    inbound_slots: Arc<Semaphore>,
 }
 
 impl TcpServer {
@@ -34,12 +45,15 @@ impl TcpServer {
         tcp_listener: TcpListener,
         sender: Sender<ChannelMessage>,
         connect_receiver: Receiver<SendInfo>,
+        tracker: TaskTracker,
     ) -> Result<Self, anyhow::Error> {
         Ok(Self {
             endpoint_id,
             tcp_listener,
             sender,
             connect_receiver,
+            tracker,
+            inbound_slots: Arc::new(Semaphore::new(MAX_INBOUND_CONNECTIONS)),
         })
     }
 
@@ -58,7 +72,7 @@ impl TcpServer {
                     info!("{INNER_NAME}: connect_receiver: got {:?}", i);
                     let endpoint_id = self.endpoint_id;
                     let sender = self.sender.clone();
-                    tokio::spawn(async move {
+                    self.tracker.spawn(async move {
                         let id = i.id.clone();
                         if let Err(e) = Self::connect(endpoint_id, sender.clone(), cctk, i).await {
                             let _ = sender.send(ChannelMessage { id, direction: ChannelDirection::LibToFront,
@@ -72,14 +86,30 @@ impl TcpServer {
                     match r {
                         Ok((socket, remote_addr)) => {
                             trace!("{INNER_NAME}: new client: {remote_addr}");
+                            let permit = match self.inbound_slots.clone().try_acquire_owned() {
+                                Ok(p) => p,
+                                Err(_) => {
+                                    warn!("{INNER_NAME}: too many inbound connections, dropping {remote_addr}");
+                                    drop(socket);
+                                    continue;
+                                }
+                            };
                             let esender = self.sender.clone();
                             let csender = self.sender.clone();
 
-                            tokio::spawn(async move {
+                            self.tracker.spawn(async move {
+                                let _permit = permit;
                                 let mut ir = InboundRequest::new(socket, remote_addr.to_string(), csender);
 
                                 loop {
-                                    match ir.handle().await {
+                                    let r = tokio::select! {
+                                        _ = cctk.cancelled() => {
+                                            info!("{INNER_NAME}: tracker cancelled, closing {remote_addr}");
+                                            break;
+                                        }
+                                        r = ir.handle() => r,
+                                    };
+                                    match r {
                                         Ok(_) => {},
                                         Err(e) => match e.downcast_ref() {
                                             Some(AppError::NotAnError) => break,
@@ -106,7 +136,7 @@ impl TcpServer {
                         },
                         Err(err) => {
                             error!("{INNER_NAME}: error accepting: {}", err);
-                            break;
+                            tokio::time::sleep(ACCEPT_ERROR_BACKOFF).await;
                         }
                     }
                 }

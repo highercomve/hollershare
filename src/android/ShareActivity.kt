@@ -24,17 +24,32 @@ import org.json.JSONObject
 class ShareActivity : Activity() {
     companion object {
         private const val TAG = "HollerShare"
+        // What one share may stage: the engine sends at most 1024 files,
+        // and text over 1 MB doesn't fit an Intent extra.
+        private const val MAX_FILES = 1024
+        private const val MAX_TOTAL_BYTES = 8L * 1024 * 1024 * 1024
+        private const val MAX_TEXT_CHARS = 1_000_000
+        private const val MAX_UNIQUE_NAMES = 10_000
+        // Staged shares older than this are removed; a newer one may still
+        // be sending.
+        private const val STALE_SHARE_MS = 24L * 60 * 60 * 1000
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        try {
-            handleIntent(intent)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to handle share intent", e)
-        } finally {
-            finish()
-        }
+        val shared = intent
+        // Copying shared files can take long (large videos): off the UI
+        // thread, so the app doesn't stop responding. The activity stays
+        // until the copy ends, keeping its read access to the shared URIs.
+        Thread({
+            try {
+                handleIntent(shared)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to handle share intent", e)
+            } finally {
+                runOnUiThread { finish() }
+            }
+        }, "hollershare-share").start()
     }
 
     private fun handleIntent(intent: Intent) {
@@ -55,7 +70,10 @@ class ShareActivity : Activity() {
             val text = intent.getStringExtra(Intent.EXTRA_TEXT)
                 ?: intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()
             if (!text.isNullOrEmpty()) {
-                launchWithText(text)
+                if (text.length > MAX_TEXT_CHARS) {
+                    Log.w(TAG, "Shared text of ${text.length} characters cut to $MAX_TEXT_CHARS")
+                }
+                launchWithText(text.take(MAX_TEXT_CHARS))
                 return
             }
         } else if (Intent.ACTION_SEND_MULTIPLE == action) {
@@ -74,34 +92,53 @@ class ShareActivity : Activity() {
     }
 
     private fun stageAndLaunch(uris: List<Uri>) {
-        val stagingDir = File(cacheDir, "shared_outgoing")
-        if (stagingDir.exists()) {
-            stagingDir.deleteRecursively()
+        // Each share gets its own folder: a new share must not delete files
+        // an earlier one is still sending.
+        val root = File(cacheDir, "shared_outgoing")
+        removeStaleShares(root)
+        val stagingDir = File(root, System.currentTimeMillis().toString())
+        if (!stagingDir.mkdirs() && !stagingDir.isDirectory) {
+            Log.w(TAG, "Could not create the share staging folder")
+            return
         }
-        stagingDir.mkdirs()
 
         val filesArray = JSONArray()
         var fallbackIndex = 0
+        var totalBytes = 0L
 
-        for (uri in uris) {
+        if (uris.size > MAX_FILES) {
+            Log.w(TAG, "Share of ${uris.size} files: only the first $MAX_FILES are sent")
+        }
+        for (uri in uris.take(MAX_FILES)) {
             val (displayName, size) = queryFileInfo(uri)
             val baseName = sanitizeFilename(displayName ?: "shared_file_${++fallbackIndex}")
-            val destFile = ensureUniqueFile(stagingDir, baseName)
+            val destFile = ensureUniqueFile(stagingDir, baseName) ?: continue
 
             try {
-                contentResolver.openInputStream(uri)?.use { input ->
+                val input = contentResolver.openInputStream(uri)
+                if (input == null) {
+                    Log.w(TAG, "No content for shared URI: $uri")
+                    continue
+                }
+                val copied = input.use { source ->
                     FileOutputStream(destFile).use { output ->
-                        input.copyTo(output)
+                        copyAtMost(source, output, MAX_TOTAL_BYTES - totalBytes)
                     }
                 }
-                val actualSize = if (size > 0) size else destFile.length()
+                if (copied < 0) {
+                    destFile.delete()
+                    Log.w(TAG, "Share is over ${MAX_TOTAL_BYTES} bytes; the rest is not sent")
+                    break
+                }
+                totalBytes += copied
                 val fileObj = JSONObject().apply {
                     put("path", destFile.absolutePath)
                     put("name", destFile.name)
-                    put("size", actualSize)
+                    put("size", if (size > 0) size else copied)
                 }
                 filesArray.put(fileObj)
             } catch (e: Exception) {
+                destFile.delete()
                 Log.w(TAG, "Failed to stage incoming share URI: $uri", e)
             }
         }
@@ -112,6 +149,31 @@ class ShareActivity : Activity() {
                 put("files", filesArray)
             }
             launchMain(payload.toString())
+        } else {
+            stagingDir.delete()
+        }
+    }
+
+    /** Copies at most [limit] bytes; returns the count, or -1 when the source is longer. */
+    private fun copyAtMost(input: java.io.InputStream, output: FileOutputStream, limit: Long): Long {
+        val buffer = ByteArray(64 * 1024)
+        var copied = 0L
+        while (true) {
+            val n = input.read(buffer)
+            if (n < 0) return copied
+            if (copied + n > limit) return -1
+            output.write(buffer, 0, n)
+            copied += n
+        }
+    }
+
+    /** Removes staged shares older than a day (and the flat files of older versions). */
+    private fun removeStaleShares(root: File) {
+        val now = System.currentTimeMillis()
+        root.listFiles()?.forEach { entry ->
+            val stamp = entry.name.toLongOrNull()
+            val stale = if (entry.isDirectory && stamp != null) now - stamp > STALE_SHARE_MS else now - entry.lastModified() > STALE_SHARE_MS
+            if (stale && !entry.deleteRecursively()) Log.w(TAG, "Could not remove old staged share ${entry.name}")
         }
     }
 
@@ -156,20 +218,21 @@ class ShareActivity : Activity() {
     private fun sanitizeFilename(name: String): String {
         val base = File(name).name
         val sanitized = base.replace(Regex("[/\\\\:*?\"<>|]"), "_").trim()
-        return if (sanitized.isNotEmpty()) sanitized else "shared_file"
+        return if (sanitized.isNotEmpty() && sanitized != "." && sanitized != "..") sanitized else "shared_file"
     }
 
-    private fun ensureUniqueFile(dir: File, name: String): File {
-        var file = File(dir, name)
-        if (!file.exists()) return file
+    /** A name not yet used in [dir], or null after [MAX_UNIQUE_NAMES] tries. */
+    private fun ensureUniqueFile(dir: File, name: String): File? {
+        val first = File(dir, name)
+        if (!first.exists()) return first
         val dot = name.lastIndexOf('.')
         val base = if (dot != -1) name.substring(0, dot) else name
         val ext = if (dot != -1) name.substring(dot) else ""
-        var count = 1
-        while (file.exists()) {
-            file = File(dir, "$base ($count)$ext")
-            count++
+        for (count in 1..MAX_UNIQUE_NAMES) {
+            val file = File(dir, "$base ($count)$ext")
+            if (!file.exists()) return file
         }
-        return file
+        Log.w(TAG, "No free name for $name")
+        return null
     }
 }

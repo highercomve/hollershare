@@ -123,6 +123,30 @@ fn requestJson(allocator: std.mem.Allocator, value: anytype) ![]const u8 {
     return allocator.dupe(u8, std.mem.span(response));
 }
 
+/// Whether the engine answered a command with `"ok": true`; prints its
+/// error otherwise.
+fn commandOk(io: std.Io, allocator: std.mem.Allocator, response: []const u8, what: []const u8) bool {
+    const parsed = std.json.parseFromSlice(struct { ok: bool, @"error": ?[]const u8 = null }, allocator, response, .{ .ignore_unknown_fields = true }) catch {
+        printErr(io, "{s} failed: unreadable answer from the engine\n", .{what});
+        return false;
+    };
+    if (!parsed.value.ok) printErr(io, "{s} failed: {s}\n", .{ what, parsed.value.@"error" orelse "unknown error" });
+    return parsed.value.ok;
+}
+
+/// Accept or decline an incoming transfer; false when the engine refused.
+fn decide(io: std.Io, allocator: std.mem.Allocator, id: []const u8, accept: bool) bool {
+    const response = requestJson(allocator, .{ .command = "decide", .id = id, .accept = accept }) catch |err| {
+        printErr(io, "{s} failed: {s}\n", .{ if (accept) "Accepting" else "Declining", @errorName(err) });
+        return false;
+    };
+    return commandOk(io, allocator, response, if (accept) "Accepting" else "Declining");
+}
+
+/// Snapshots the engine failed to answer in a row before the CLI gives up
+/// (each poll is 100-250 ms apart: about 10 s).
+const max_failed_snapshots = 50;
+
 const DiscoveredPeer = struct {
     id: []const u8,
     name: []const u8,
@@ -606,12 +630,44 @@ fn runSendText(gpa: std.mem.Allocator, arena: std.mem.Allocator, io: std.Io, arg
     return monitorTransfer(arena, io, resolved.address, resolved.name, false);
 }
 
+/// The transfers array of an engine snapshot, or null when the engine
+/// didn't answer or the answer isn't the expected shape.
+fn snapshotTransfers(allocator: std.mem.Allocator) ?std.json.Value {
+    const response = requestJson(allocator, .{ .command = "snapshot" }) catch return null;
+    const parsed = std.json.parseFromSlice(std.json.Value, allocator, response, .{}) catch return null;
+    if (parsed.value != .object) return null;
+    const data = parsed.value.object.get("data") orelse return null;
+    if (data != .object) return null;
+    const transfers = data.object.get("transfers") orelse return null;
+    if (transfers != .array) return null;
+    return transfers;
+}
+
+/// The answer to a yes/no prompt on stdin. An empty line means yes only
+/// at a terminal (the prompt's default); closed or unreadable stdin, a
+/// line too long, or anything but y/yes declines, so a receiver with no
+/// one to ask never accepts on its own.
+fn askYes(io: std.Io, stdin_is_tty: bool) bool {
+    var buf: [64]u8 = undefined;
+    var reader = std.Io.File.stdin().readerStreaming(io, &buf);
+    const line = (reader.interface.takeDelimiter('\n') catch {
+        printOut(io, "\nNo answer read; declining.\n", .{});
+        return false;
+    }) orelse {
+        printOut(io, "\nNo one to ask (stdin closed); declining. Use --auto-accept to accept unattended.\n", .{});
+        return false;
+    };
+    const trimmed = std.mem.trim(u8, line, " \t\r\n");
+    if (trimmed.len == 0) return stdin_is_tty;
+    return std.ascii.eqlIgnoreCase(trimmed, "y") or std.ascii.eqlIgnoreCase(trimmed, "yes");
+}
+
 fn monitorTransfer(arena: std.mem.Allocator, io: std.Io, address: []const u8, peer_name: []const u8, is_files: bool) !u8 {
     _ = is_files;
     const is_tty = std.Io.File.stdout().isTty(io) catch false;
     var printed_pin = false;
     var last_pct: u8 = 255;
-    var last_state: []const u8 = "";
+    var failed_snapshots: u32 = 0;
 
     var transfer_id_buf: [256]u8 = undefined;
     var transfer_id: ?[]const u8 = null;
@@ -622,19 +678,28 @@ fn monitorTransfer(arena: std.mem.Allocator, io: std.Io, address: []const u8, pe
     var byte_buf1: [32]u8 = undefined;
     var byte_buf2: [32]u8 = undefined;
 
+    // Each poll's snapshot lives until the next one: the caller's arena
+    // would keep every one of them for the whole transfer.
+    var poll_arena = std.heap.ArenaAllocator.init(arena);
+    defer poll_arena.deinit();
+
     while (true) {
         io.sleep(.fromMilliseconds(100), .awake) catch {};
+        _ = poll_arena.reset(.retain_capacity);
+        const poll = poll_arena.allocator();
 
-        const snap_resp = requestJson(arena, .{ .command = "snapshot" }) catch continue;
-        const parsed = std.json.parseFromSlice(std.json.Value, arena, snap_resp, .{}) catch continue;
-        const data_obj = if (parsed.value == .object) parsed.value.object.get("data") else null;
-        if (data_obj == null or data_obj.? != .object) continue;
-
-        const transfers_val = data_obj.?.object.get("transfers");
-        if (transfers_val == null or transfers_val.? != .array) continue;
+        const transfers_val = snapshotTransfers(poll) orelse {
+            failed_snapshots += 1;
+            if (failed_snapshots >= max_failed_snapshots) {
+                printErr(io, "\nError: the Quick Share engine stopped answering.\n", .{});
+                return 1;
+            }
+            continue;
+        };
+        failed_snapshots = 0;
 
         var current_transfer: ?std.json.ObjectMap = null;
-        for (transfers_val.?.array.items) |t| {
+        for (transfers_val.array.items) |t| {
             if (t != .object) continue;
             const rtype = t.object.get("rtype");
             if (rtype == null or rtype.? != .string or !std.mem.eql(u8, rtype.?.string, "Outbound")) continue;
@@ -648,6 +713,8 @@ fn monitorTransfer(arena: std.mem.Allocator, io: std.Io, address: []const u8, pe
                     break;
                 }
             } else if (std.mem.startsWith(u8, tid.?.string, address)) {
+                // Ids are "address:port#n"; one too long to keep can't be followed.
+                if (tid.?.string.len > transfer_id_buf.len) continue;
                 @memcpy(transfer_id_buf[0..tid.?.string.len], tid.?.string);
                 transfer_id = transfer_id_buf[0..tid.?.string.len];
                 current_transfer = t.object;
@@ -670,10 +737,6 @@ fn monitorTransfer(arena: std.mem.Allocator, io: std.Io, address: []const u8, pe
         const meta_val = t.get("meta");
         const meta = if (meta_val != null and meta_val.? == .object) meta_val.?.object else null;
 
-        if (!std.mem.eql(u8, state, last_state)) {
-            last_state = state;
-        }
-
         if (std.mem.eql(u8, state, "WaitingForUserConsent") or std.mem.eql(u8, state, "SendingFiles")) {
             if (!printed_pin and meta != null) {
                 if (meta.?.get("pin_code")) |pin| {
@@ -695,7 +758,7 @@ fn monitorTransfer(arena: std.mem.Allocator, io: std.Io, address: []const u8, pe
                 if (ab == .integer and ab.integer >= 0) ack = @intCast(ab.integer);
             }
 
-            const pct: u8 = if (total > 0) @intCast(@min(100, (ack * 100) / total)) else 0;
+            const pct: u8 = if (total > 0) @intCast(@min(100, std.math.mulWide(u64, @min(ack, total), 100) / total)) else 0;
             if (is_tty) {
                 printOut(io, "\rSending: {d}% ({s} / {s})   ", .{
                     pct,
@@ -782,18 +845,28 @@ fn runReceive(gpa: std.mem.Allocator, arena: std.mem.Allocator, io: std.Io, args
     var seen_requests: std.ArrayList([]const u8) = .empty;
     defer seen_requests.deinit(arena);
 
+    const stdin_is_tty = std.Io.File.stdin().isTty(io) catch false;
+    var poll_arena = std.heap.ArenaAllocator.init(arena);
+    defer poll_arena.deinit();
+    var failed_snapshots: u32 = 0;
+
+    // The receiver runs until Ctrl+C (or the engine stops answering).
     while (true) {
         io.sleep(.fromMilliseconds(250), .awake) catch {};
+        _ = poll_arena.reset(.retain_capacity);
+        const poll = poll_arena.allocator();
 
-        const snap_resp = requestJson(arena, .{ .command = "snapshot" }) catch continue;
-        const parsed = std.json.parseFromSlice(std.json.Value, arena, snap_resp, .{}) catch continue;
-        const data_obj = if (parsed.value == .object) parsed.value.object.get("data") else null;
-        if (data_obj == null or data_obj.? != .object) continue;
+        const transfers_val = snapshotTransfers(poll) orelse {
+            failed_snapshots += 1;
+            if (failed_snapshots >= max_failed_snapshots) {
+                printErr(io, "Error: the Quick Share engine stopped answering.\n", .{});
+                return 1;
+            }
+            continue;
+        };
+        failed_snapshots = 0;
 
-        const transfers_val = data_obj.?.object.get("transfers");
-        if (transfers_val == null or transfers_val.? != .array) continue;
-
-        for (transfers_val.?.array.items) |t| {
+        for (transfers_val.array.items) |t| {
             if (t != .object) continue;
             const rtype = t.object.get("rtype");
             if (rtype == null or rtype.? != .string or !std.mem.eql(u8, rtype.?.string, "Inbound")) continue;
@@ -836,23 +909,11 @@ fn runReceive(gpa: std.mem.Allocator, arena: std.mem.Allocator, io: std.Io, args
 
                 if (auto_accept) {
                     printOut(io, "Auto-accepting transfer...\n", .{});
-                    _ = requestJson(arena, .{ .command = "decide", .id = tid, .accept = true }) catch {};
+                    _ = decide(io, poll, tid, true);
                 } else {
                     printOut(io, "Accept transfer? [Y/n]: ", .{});
-                    const stdin_file = std.Io.File.stdin();
-                    var buf: [64]u8 = undefined;
-                    var reader = stdin_file.readerStreaming(io, &buf);
-                    const line = (reader.interface.takeDelimiter('\n') catch null) orelse "";
-                    const trimmed = std.mem.trim(u8, line, " \t\r\n");
-                    const accept = (trimmed.len == 0 or std.ascii.eqlIgnoreCase(trimmed, "y") or std.ascii.eqlIgnoreCase(trimmed, "yes"));
-
-                    if (accept) {
-                        _ = requestJson(arena, .{ .command = "decide", .id = tid, .accept = true }) catch {};
-                        printOut(io, "Accepted.\n", .{});
-                    } else {
-                        _ = requestJson(arena, .{ .command = "decide", .id = tid, .accept = false }) catch {};
-                        printOut(io, "Declined.\n", .{});
-                    }
+                    const accept = askYes(io, stdin_is_tty);
+                    if (decide(io, poll, tid, accept)) printOut(io, "{s}\n", .{if (accept) "Accepted." else "Declined."});
                 }
             } else if (std.mem.eql(u8, state, "Finished")) {
                 for (seen_requests.items, 0..) |s, idx| {

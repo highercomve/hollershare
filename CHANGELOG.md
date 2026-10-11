@@ -2,6 +2,17 @@
 
 Notable changes in HollerShare releases.
 
+## [Unreleased]
+
+Fixes from a code review against the NASA/JPL "Power of 10" rules.
+
+- Receiving is safer against misbehaving devices on the network: a text or data payload can't grow past its declared size, idle and stalled connections time out, at most 16 incoming connections are handled at once, a failed accept no longer stops receiving until restart, and malformed messages (a short encryption IV, file data before the transfer is accepted, a negative size) are refused instead of crashing the connection.
+- Received file names are also refused when they are Windows device names (CON, NUL, COM1…), end in a dot or space, or contain direction-override characters that can disguise an extension.
+- `hollershare receive` no longer accepts transfers on its own when there is no one to ask (stdin closed): it declines unless `--auto-accept` is given. It reports when accepting or declining fails, gives up when the engine stops answering, and no longer grows in memory while it runs.
+- If the sharing engine stops unexpectedly, the app notices and can start it again instead of failing every request. A slow request no longer blocks the others or quitting.
+- Android: files shared from other apps are copied off the main thread, with limits (1024 files, 8 GB), so large shares no longer freeze the app; a new share no longer deletes files an earlier one is still sending; shared text is limited to 1 MB.
+- Android: fixed a crash path when the system returned no application or class loader to the multicast and Bluetooth helpers.
+
 ## [1.0.3] — 2026-10-11
 
 - Built on Oriel 0.9.15 (from 0.9.11). Fixed Android discovery on phones older than Android 14: a device lookup the system never answered blocked the lookups after it, and a failed one was never retried, so other computers and phones could stay missing. Lookups now time out after 10 seconds and failed ones are retried.

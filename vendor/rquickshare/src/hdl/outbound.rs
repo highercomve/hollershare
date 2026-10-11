@@ -8,7 +8,6 @@ use std::time::Duration;
 use anyhow::anyhow;
 use bytes::Bytes;
 use hmac::{Hmac, Mac};
-use libaes::{Cipher, AES_256_KEY_LEN};
 use p256::ecdh::diffie_hellman;
 use p256::elliptic_curve::sec1::{FromEncodedPoint, ToEncodedPoint};
 use p256::{EncodedPoint, PublicKey};
@@ -16,13 +15,16 @@ use prost::Message;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256, Sha512};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::AsyncReadExt;
 use tokio::net::TcpStream;
 use tokio::sync::broadcast::{Receiver, Sender};
 use ts_rs::TS;
 
 use super::info::{InternalFileInfo, TransferMetadata};
-use super::{InnerState, State};
+use super::{
+    aes_cbc_decrypt, aes_cbc_encrypt, append_bytes_chunk, next_seq, write_all_timeout,
+    InnerState, State, IDLE_TIMEOUT, SANE_FRAME_LENGTH,
+};
 use crate::channel::{ChannelAction, ChannelDirection, ChannelMessage};
 use crate::location_nearby_connections::bandwidth_upgrade_negotiation_frame::upgrade_path_info::Medium;
 use crate::location_nearby_connections::connection_response_frame::ResponseStatus;
@@ -51,7 +53,6 @@ use crate::{location_nearby_connections, sharing_nearby};
 
 type HmacSha256 = Hmac<Sha256>;
 
-const SANE_FRAME_LENGTH: i32 = 5 * 1024 * 1024;
 const SANITY_DURATION: Duration = Duration::from_micros(10);
 
 #[derive(Debug, Deserialize, Serialize, TS)]
@@ -67,6 +68,8 @@ pub struct OutboundRequest {
     socket: TcpStream,
     header_bytes: [u8; 4],
     header_length: usize,
+    // Last time the peer made progress; drives the idle timeout.
+    last_activity: tokio::time::Instant,
     pub state: InnerState,
     sender: Sender<ChannelMessage>,
     receiver: Receiver<ChannelMessage>,
@@ -100,12 +103,15 @@ impl OutboundRequest {
             socket,
             header_bytes: [0; 4],
             header_length: 0,
+            last_activity: tokio::time::Instant::now(),
             state: InnerState {
                 id,
                 server_seq: 0,
                 client_seq: 0,
                 state: State::Initial,
-                encryption_done: true,
+                // Becomes true once UKEY2 keys exist (finalize_key_exchange);
+                // until then disconnection/keepalive frames go out in plaintext.
+                encryption_done: false,
                 transfer_metadata: Some(TransferMetadata {
                     id: String::from(""),
                     source: Some(rdi),
@@ -125,7 +131,17 @@ impl OutboundRequest {
         // Buffer for the 4-byte length
         let mut length_buf = [0u8; 4];
 
+        // No idle timeout while the remote user is deciding.
+        let waiting_for_user = self.state.state == State::SentIntroduction;
+        if waiting_for_user {
+            self.last_activity = tokio::time::Instant::now();
+        }
+        let idle_deadline = self.last_activity + IDLE_TIMEOUT;
+
         tokio::select! {
+            _ = tokio::time::sleep_until(idle_deadline), if !waiting_for_user => {
+                return Err(anyhow!("Peer idle for more than {}s", IDLE_TIMEOUT.as_secs()));
+            }
             _ = tokio::time::sleep_until(self.completion_deadline.unwrap_or_else(|| tokio::time::Instant::now() + Duration::from_secs(3600))), if self.completion_deadline.is_some() => {
                 return Err(anyhow!("Receiver did not confirm transfer completion within 30 seconds"));
             }
@@ -166,6 +182,7 @@ impl OutboundRequest {
             h = self.socket.read(&mut length_buf[self.header_length..]) => {
                 let count = h?;
                 if count == 0 { return Err(anyhow!("Connection closed")); }
+                self.last_activity = tokio::time::Instant::now();
                 self.header_bytes[self.header_length..self.header_length + count]
                     .copy_from_slice(&length_buf[self.header_length..self.header_length + count]);
                 self.header_length += count;
@@ -173,6 +190,8 @@ impl OutboundRequest {
                     let header = self.header_bytes;
                     self.header_length = 0;
                     self._handle(header).await?;
+                    // Sending files happens inside _handle; restart the idle clock after it.
+                    self.last_activity = tokio::time::Instant::now();
                 }
             }
         }
@@ -443,7 +462,12 @@ impl OutboundRequest {
         &mut self,
         smsg: &SecureMessage,
     ) -> Result<(), anyhow::Error> {
-        let mut hmac = HmacSha256::new_from_slice(self.state.recv_hmac_key.as_ref().unwrap())?;
+        let recv_hmac_key = self
+            .state
+            .recv_hmac_key
+            .as_ref()
+            .ok_or_else(|| anyhow!("Missing receive HMAC key"))?;
+        let mut hmac = HmacSha256::new_from_slice(recv_hmac_key)?;
         hmac.update(&smsg.header_and_body);
         hmac.verify_slice(&smsg.signature)
             .map_err(|_| anyhow!("hmac!=signature"))?;
@@ -451,15 +475,16 @@ impl OutboundRequest {
         let header_and_body = HeaderAndBody::decode(&*smsg.header_and_body)?;
 
         let msg_data = header_and_body.body;
-        let key = self.state.decrypt_key.as_ref().unwrap();
-
-        let mut cipher = Cipher::new_256(key[..AES_256_KEY_LEN].try_into()?);
-        cipher.set_auto_padding(true);
-        let decrypted = cipher.cbc_decrypt(header_and_body.header.iv(), &msg_data);
+        let key = self
+            .state
+            .decrypt_key
+            .as_ref()
+            .ok_or_else(|| anyhow!("Missing decryption key"))?;
+        let decrypted = aes_cbc_decrypt(key, header_and_body.header.iv(), &msg_data)?;
 
         let d2d_msg = DeviceToDeviceMessage::decode(&*decrypted)?;
 
-        let seq = self.get_client_seq_inc().await;
+        let seq = self.get_client_seq_inc()?;
         if d2d_msg.sequence_number() != seq {
             return Err(anyhow!(
                 "Error d2d_msg.sequence_number invalid ({} vs {})",
@@ -506,37 +531,23 @@ impl OutboundRequest {
                         info!("Processing PayloadType::Bytes");
                         let payload_id = header.id();
 
-                        if header.total_size() > SANE_FRAME_LENGTH.into() {
-                            self.state.payload_buffers.remove(&payload_id);
-                            return Err(anyhow!(
-                                "Payload too large: {} bytes",
-                                header.total_size()
-                            ));
-                        }
-
-                        self.state
-                            .payload_buffers
-                            .entry(payload_id)
-                            .or_insert_with(|| Vec::with_capacity(header.total_size() as usize));
-
-                        // Get the current length of the buffer, if it exists, without holding a mutable borrow.
-                        let buffer_len = self.state.payload_buffers.get(&payload_id).unwrap().len();
-                        if chunk.offset() != buffer_len as i64 {
-                            self.state.payload_buffers.remove(&payload_id);
-                            return Err(anyhow!(
-                                "Unexpected chunk offset: {}, expected: {}",
-                                chunk.offset(),
-                                buffer_len
-                            ));
-                        }
-
-                        let buffer = self.state.payload_buffers.get_mut(&payload_id).unwrap();
-                        if let Some(body) = &chunk.body {
-                            buffer.extend(body);
-                        }
+                        // Also rejects total_size < 0 and > SANE_FRAME_LENGTH.
+                        append_bytes_chunk(
+                            &mut self.state.payload_buffers,
+                            payload_id,
+                            header.total_size(),
+                            chunk.offset(),
+                            chunk.body.as_deref(),
+                        )?;
 
                         if (chunk.flags() & 1) == 1 {
                             debug!("Chunk flags & 1 == 1 ?? End of data ??");
+                            // Final chunk: take ownership so the entry is pruned.
+                            let buffer = self
+                                .state
+                                .payload_buffers
+                                .remove(&payload_id)
+                                .unwrap_or_default();
 
                             let innner_frame = sharing_nearby::Frame::decode(buffer.as_slice())?;
                             self.process_transfer_setup(&innner_frame).await?;
@@ -1201,17 +1212,19 @@ impl OutboundRequest {
 
     async fn encrypt_and_send(&mut self, frame: &OfflineFrame) -> Result<(), anyhow::Error> {
         let d2d_msg = DeviceToDeviceMessage {
-            sequence_number: Some(self.get_server_seq_inc().await),
+            sequence_number: Some(self.get_server_seq_inc()?),
             message: Some(frame.encode_to_vec()),
         };
 
-        let key = self.state.encrypt_key.as_ref().unwrap();
+        let key = self
+            .state
+            .encrypt_key
+            .as_ref()
+            .ok_or_else(|| anyhow!("Missing encryption key"))?;
         let msg_data = d2d_msg.encode_to_vec();
         let iv = gen_random(16);
 
-        let mut cipher = Cipher::new_256(&key[..AES_256_KEY_LEN].try_into().unwrap());
-        cipher.set_auto_padding(true);
-        let encrypted = cipher.cbc_encrypt(&iv, &msg_data);
+        let encrypted = aes_cbc_encrypt(key, &iv, &msg_data)?;
 
         let hb = HeaderAndBody {
             body: encrypted,
@@ -1230,7 +1243,12 @@ impl OutboundRequest {
             },
         };
 
-        let mut hmac = HmacSha256::new_from_slice(self.state.send_hmac_key.as_ref().unwrap())?;
+        let send_hmac_key = self
+            .state
+            .send_hmac_key
+            .as_ref()
+            .ok_or_else(|| anyhow!("Missing send HMAC key"))?;
+        let mut hmac = HmacSha256::new_from_slice(send_hmac_key)?;
         hmac.update(&hb.encode_to_vec());
         let result = hmac.finalize();
 
@@ -1276,34 +1294,15 @@ impl OutboundRequest {
         prefixed_length.extend_from_slice(&length_bytes);
         prefixed_length.extend_from_slice(&data);
 
-        self.socket.write_all(&prefixed_length).await?;
-        self.socket.flush().await?;
-
-        Ok(())
+        write_all_timeout(&mut self.socket, &prefixed_length).await
     }
 
-    async fn get_server_seq_inc(&mut self) -> i32 {
-        self.update_state(
-            |e| {
-                e.server_seq += 1;
-            },
-            false,
-        )
-        .await;
-
-        self.state.server_seq
+    fn get_server_seq_inc(&mut self) -> Result<i32, anyhow::Error> {
+        next_seq(&mut self.state.server_seq)
     }
 
-    async fn get_client_seq_inc(&mut self) -> i32 {
-        self.update_state(
-            |e| {
-                e.client_seq += 1;
-            },
-            false,
-        )
-        .await;
-
-        self.state.client_seq
+    fn get_client_seq_inc(&mut self) -> Result<i32, anyhow::Error> {
+        next_seq(&mut self.state.client_seq)
     }
 
     async fn update_state<F>(&mut self, f: F, inform: bool)

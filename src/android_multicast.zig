@@ -74,6 +74,9 @@ fn getApplication(env: *jni.Env) ?jni.jobject {
     };
     const app = f.CallStaticObjectMethodA(env, activity_thread, current_application, null);
     if (env.clearException()) return null;
+    // jobject is itself optional: a null one must not come back wrapped
+    // in a non-null `?jobject` (callers' `orelse` would not fire).
+    if (app == null) return null;
     return app;
 }
 
