@@ -261,8 +261,7 @@ async function drop_received(event) {
   const added = [], lost = [];
   for (const file of dropped.files) {
     try {
-      const resolved = await window.oriel.drop.path(file);
-      const path = typeof resolved === "string" ? resolved : resolved && resolved.path;
+      const path = await window.oriel.drop.path(file);
       if (typeof path !== "string" || !path) { lost.push(file.name || "a file"); continue; }
       if (!files.some(f => f.path === path)) added.push({ path, name:file.name || path.split("/").pop(), size:file.size || 0 });
     } catch (_) { lost.push(file.name || "a file"); }

@@ -7,8 +7,9 @@ const source = readFileSync(new URL("../frontend/app.js", import.meta.url), "utf
 const drop = source.slice(source.indexOf("async function drop_received(event)"), source.indexOf("if (drop_panel && window.oriel)"));
 const send = source.slice(source.indexOf("async function send(address, name)"), source.indexOf("async function decision("));
 
-for (const [label, resolved] of [["native path object", {path:"/tmp/example.apk"}], ["path string", "/tmp/example.apk"]]) {
-  test(`dropped file sends a string path: ${label}`, async () => {
+// oriel.drop.path resolves the file's path as a string, or null.
+for (const resolved of ["/tmp/example.apk"]) {
+  test("dropped file sends its path", async () => {
     const calls = [], errors = [];
     const elements = new Map();
     const context = vm.createContext({
@@ -33,7 +34,7 @@ for (const [label, resolved] of [["native path object", {path:"/tmp/example.apk"
   });
 }
 
-for (const resolved of [null, {path:null}, {path:42}]) {
+for (const resolved of [null, ""]) {
   test(`unresolvable dropped file is rejected: ${JSON.stringify(resolved)}`, async () => {
     const errors=[];
     const context=vm.createContext({files:[],drop_depth:1,
