@@ -62,6 +62,11 @@ pub fn build(b: *std.Build) void {
             // mDNS discovery on the LAN (Android: the Wi-Fi multicast lock).
             .local_network = "Find and reach devices on your network to share files with",
         },
+        // HollerShare's Kotlin: the BLE beacon and the share sheet handler.
+        .android = .{ .sources = &.{
+            b.path("src/android/QuickShareBeacon.kt"),
+            b.path("src/android/ShareActivity.kt"),
+        } },
         .package = .{
             .id = "dev.hollershare.App",
             .name = "HollerShare",
@@ -107,11 +112,10 @@ pub fn build(b: *std.Build) void {
     }
     if (target.result.os.tag == .macos) application.exe.root_module.linkFramework("CoreBluetooth", .{});
     if (android) {
-        // HollerShare's Kotlin (the BLE beacon, share sheet handler) and AndroidManifest,
-        // copied into the Gradle project that `zig build android-project` writes:
+        // HollerShare's AndroidManifest (the share sheet activity), copied into
+        // the Gradle project that `zig build android-project` writes; its Kotlin
+        // comes in through `.android.sources`.
         const sources = b.addUpdateSourceFiles();
-        sources.addCopyFileToSource(b.path("src/android/QuickShareBeacon.kt"), "android/app/src/main/java/dev/hollershare/QuickShareBeacon.kt");
-        sources.addCopyFileToSource(b.path("src/android/ShareActivity.kt"), "android/app/src/main/java/dev/hollershare/ShareActivity.kt");
         sources.addCopyFileToSource(b.path("src/android/AndroidManifest.xml"), "android/app/src/main/AndroidManifest.xml");
         // Adaptive icons fill Android's launcher mask rather than being shrunk
         // into its legacy white tile. Android 13+ also gets a themed icon.
