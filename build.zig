@@ -16,7 +16,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .tray = true,
         .menu = false,
-        .store = true, // dataDir: where settings.json lives
+        .store = false, // settings.json lives in oriel.paths.appData
         .dialog = true,
         .native_ui = b.option(bool, "native_ui", "Use the native renderer") orelse true,
         .notification = true,

@@ -25,13 +25,16 @@ extern fn hollershare_free(pointer: [*:0]u8) void;
 extern fn hollershare_stop() void;
 extern fn hollershare_set_device_name(name: ?[*:0]const u8) void;
 extern fn hollershare_set_event_callback(callback: ?*const fn ([*:0]const u8) callconv(.c) void) void;
-extern fn hollershare_desktop_init(application: ?*anyopaque, window: ?*anyopaque) void;
+extern fn hollershare_desktop_init(window: *anyopaque) void;
 extern fn hollershare_desktop_cleanup() void;
 extern fn hollershare_desktop_dark() c_int;
 extern fn hollershare_desktop_quit() void;
 extern fn hollershare_desktop_notify(id: [*:0]const u8, kind: [*:0]const u8, name: [*:0]const u8, pin: [*:0]const u8, text: c_int) void;
 extern fn hollershare_open_path(path: [*:0]const u8) c_int;
-var tray: ?*oriel.tray.Tray = null;
+var tray: if (oriel.tray.available) ?*oriel.tray.Tray else void = if (oriel.tray.available) null else {};
+/// The main window's GtkWindow (Linux), from `oriel.hooks`' window_created:
+/// `setup` hands it to desktop_linux.c, which gets the GtkApplication from it.
+var main_gtk_window: ?*anyopaque = null;
 var startup_error: ?[]const u8 = null;
 /// Where received files go: set by `main` before `start_engine`.
 var engine_directory: [:0]const u8 = "";
@@ -75,8 +78,10 @@ pub const Events = struct {
     share_target: []const u8,
 };
 fn show_window() void {
-    oriel.App.showWindow();
-    if (oriel.App.getWindow("main")) |window| window.focus();
+    if (oriel.App.getWindow("main")) |window| {
+        window.show();
+        window.focus();
+    }
 }
 fn tray_menu(id: []const u8, checked: ?bool) void {
     if (std.mem.eql(u8, id, "visible")) {
@@ -96,7 +101,7 @@ fn tray_menu(id: []const u8, checked: ?bool) void {
 }
 fn sync_tray_visibility(_: void) void {
     const visible = device_visible.load(.acquire);
-    if (tray) |icon| icon.setChecked("visible", visible);
+    if (oriel.tray.available) if (tray) |icon| icon.setChecked("visible", visible);
     oriel.App.events(Events).emit(.tray_visibility, visible);
 }
 fn set_visibility(allocator: std.mem.Allocator, visible: bool) ![]const u8 {
@@ -116,11 +121,24 @@ fn tray_set_visibility(visible: bool) void {
     };
     defer allocator.free(response);
 }
+/// The folder settings.json lives in: `oriel.paths.appData`. On Android
+/// that is the files dir itself, while HollerShare up to 1.0.4 (Oriel's old
+/// `store.dataDir`) kept it in `<files dir>/dev.hollershare.App`: that folder
+/// stays, so existing settings are found where they are.
+fn settings_dir(gpa: std.mem.Allocator, io: std.Io) ![]const u8 {
+    const base = try oriel.paths.appData(gpa, .{ .name = app_id });
+    if (!android) return base;
+    defer gpa.free(base);
+    const path = try std.fs.path.join(gpa, &.{ base, app_id });
+    errdefer gpa.free(path);
+    try std.Io.Dir.cwd().createDirPath(io, path);
+    return path;
+}
 /// Read settings.json from the app's data directory; without one, the
 /// defaults.
 fn load_settings(io: std.Io) void {
     const gpa = std.heap.smp_allocator;
-    const path = oriel.store.dataDir(gpa, app_id) catch |err| {
+    const path = settings_dir(gpa, io) catch |err| {
         std.log.warn("no app data directory, settings won't be kept: {s}", .{@errorName(err)});
         return;
     };
@@ -172,6 +190,12 @@ fn android_start_engine() void {
 fn android_start_engine_failed(err: anyerror) void {
     startup_error = std.fmt.allocPrint(std.heap.smp_allocator, "{{\"ok\":false,\"error\":\"Quick Share could not start: {s}\"}}", .{@errorName(err)}) catch null;
 }
+fn window_created(window: oriel.hooks.Window) void {
+    if (std.mem.eql(u8, window.label, "main") and window.native == .gtk) main_gtk_window = window.native.gtk;
+}
+fn window_destroyed(window: oriel.hooks.Window) void {
+    if (std.mem.eql(u8, window.label, "main")) main_gtk_window = null;
+}
 fn setup() !void {
     // Android: oriel.system.deviceName asks the UI thread, which runs only
     // once oriel.main has started, so the engine starts from here, on its own
@@ -187,8 +211,8 @@ fn setup() !void {
     // Wake nearby phones so discovery finds them (Linux does this in the
     // engine, with BlueZ). The helper waits for the permission and the adapter.
     if (builtin.abi == .android) android_beacon.start();
-    if (desktop_linux) hollershare_desktop_init(oriel.App.gtk_app, oriel.App.main_window);
-    tray = oriel.tray.Tray.create(std.heap.smp_allocator, .{
+    if (desktop_linux) if (main_gtk_window) |window| hollershare_desktop_init(window);
+    if (oriel.tray.available) tray = oriel.tray.Tray.create(std.heap.smp_allocator, .{
         .id = "dev.hollershare.App",
         .title = "HollerShare",
         .tooltip = "Share files nearby",
@@ -846,7 +870,7 @@ pub fn main(init: std.process.Init) !u8 {
         handle_desktop_file_args(arena, argv);
     }
 
-    const directory = if (builtin.abi == .android) try std.fs.path.join(init.arena.allocator(), &.{ oriel.platform.impl.paths.externalFilesDir() orelse return error.MissingAndroidStorage, "Received" }) else "";
+    const directory = if (builtin.abi == .android) try std.fs.path.join(init.arena.allocator(), &.{ try oriel.paths.appExternal(init.arena.allocator(), .{ .name = app_id }), "Received" }) else "";
     default_directory = try init.arena.allocator().dupeZ(u8, directory);
     engine_directory = try init.arena.allocator().dupeZ(u8, start_directory(init.io));
     defer android_multicast.release();
@@ -856,21 +880,19 @@ pub fn main(init: std.process.Init) !u8 {
     defer {
         hollershare_set_event_callback(null);
         if (@hasDecl(oriel.notification, "onAction")) oriel.notification.onAction(null);
-        if (tray) |icon| icon.deinit();
+        if (oriel.tray.available) if (tray) |icon| icon.deinit();
         if (desktop_linux) hollershare_desktop_cleanup();
     }
+    if (desktop_linux) try oriel.hooks.subscribe(.{ .window_created = window_created, .window_destroyed = window_destroyed });
     return oriel.main(init, .{ .commands = Commands, .events = Events }, .{
+        .app = app.build,
+        .window = .{
+            .title = "HollerShare",
+            .width = 980,
+            .height = 860,
+            .hide_on_close = builtin.abi != .android,
+        },
         .setup = setup,
-        .on_close = if (builtin.abi == .android) .quit else .hide,
         .on_second_instance = second_instance,
-        .id = "dev.hollershare.App",
-        .title = "HollerShare",
-        .width = 980,
-        .height = 860,
-        .assets = app.assets,
-        .dev = app.dev,
-        .deep_link_schemes = app.url_schemes,
-        .permissions = app.permissions,
-        .security = .{ .isolation = app.isolation },
     });
 }
