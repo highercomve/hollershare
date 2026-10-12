@@ -62,8 +62,11 @@ static void transfer_action(GSimpleAction *action, GVariant *parameter, gpointer
     g_variant_get(parameter, "(&s&s)", &id, &selected);
     hollershare_notification_action(id, selected);
 }
-void hollershare_desktop_init(void *app, void *window) {
-    application = g_object_ref(app); parent = window;
+void hollershare_desktop_init(void *window) {
+    parent = GTK_WINDOW(window);
+    GtkApplication *app = gtk_window_get_application(parent);
+    if (!app) return;
+    application = g_object_ref(app);
     GSettingsSchemaSource *source = g_settings_schema_source_get_default();
     GSettingsSchema *schema = source ? g_settings_schema_source_lookup(source, "org.gnome.desktop.interface", TRUE) : NULL;
     if (schema) {
