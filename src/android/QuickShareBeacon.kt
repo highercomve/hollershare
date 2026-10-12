@@ -1,6 +1,6 @@
-// HollerShare's own Android source: build.zig copies it into the generated
+// HollerShare's own Android source: Oriel copies it into the generated
 // Gradle project (android/app/src/main/java/dev/hollershare/) on every
-// Android build, since Oriel 0.9.1 has no way to add app sources.
+// Android build (`.android.sources` in build.zig).
 package dev.hollershare
 
 import android.Manifest

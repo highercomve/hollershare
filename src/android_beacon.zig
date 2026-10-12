@@ -4,7 +4,7 @@
 //! open. Advertising needs an `AdvertiseCallback` subclass, which JNI can't
 //! make, so the work is in HollerShare's Kotlin helper
 //! (src/android/QuickShareBeacon.kt, copied into the Gradle project by
-//! build.zig); this calls its `start` and `stop`.
+//! `.android.sources` in build.zig); this calls its `start` and `stop`.
 //!
 //! The helper is an app class: the system class loader a thread attached
 //! from native code gets doesn't see it, so it is loaded through the
