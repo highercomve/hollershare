@@ -2,6 +2,12 @@
 
 Notable changes in HollerShare releases.
 
+## [1.0.5] — 2026-10-13
+
+Built on Oriel 0.12.1, which keeps one API per feature: HollerShare's app
+setup, events, dropped files and Android sources moved to it. No change in
+what the app does.
+
 ## [1.0.4] — 2026-10-11
 
 Fixes from a code review against the NASA/JPL "Power of 10" rules.
