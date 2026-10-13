@@ -1,13 +1,13 @@
 .{
     .name = .hollershare,
-    .version = "1.0.4",
+    .version = "1.0.5",
     // Derived from the package name; changing it has security and trust implications.
     .fingerprint = 0x2a2ffbe7947d5e82,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .oriel = .{
-            .url = "git+https://github.com/highercomve/Oriel?ref=v0.12.0#69a47ecb25388847aeee174e064a323ba9016c2b",
-            .hash = "oriel-0.12.0-K1NO5T9N6gDN9vibRSSfInWVfXVx74PqkfR9E-t0HB_f",
+            .url = "git+https://github.com/highercomve/Oriel?ref=v0.12.1#e414900c09740d30abc8b64d4bb8c366cee07af3",
+            .hash = "oriel-0.12.1-K1NO5TlV6gDoxyO3qpnkHpcY8oIsMl1xLPwB3Hy1jKNc",
         },
     },
     .paths = .{ "build.zig", "build.zig.zon", "src", "frontend", "README.md", "native", "vendor", "Cargo.toml", "Cargo.lock", "LICENSE", "icon.png", "assets", "tests", "install-local.sh" },
