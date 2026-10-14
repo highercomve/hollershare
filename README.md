@@ -12,7 +12,7 @@ Download packaged builds from [Releases](https://github.com/highercomve/hollersh
 
 Requirements: Zig 0.16.0, Rust/Cargo and `protoc`. Linux builds also need a C/C++ toolchain, `pkg-config`, GTK4 and D-Bus development libraries.
 
-Oriel v0.9.3 and the Zig libraries are declared in `build.zig.zon`, pinned by commit
+Oriel 0.15.0 and the Zig libraries are declared in `build.zig.zon`, pinned by commit
 and package hash. `zig build` fetches them automatically through Zig's package
 manager. Cargo fetches the Rust dependencies using `Cargo.lock`.
 
