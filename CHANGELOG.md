@@ -2,10 +2,19 @@
 
 Notable changes in HollerShare releases.
 
-## [Unreleased]
+## [1.1.0] — 2026-10-14
+
+Built on Oriel 0.15.0. HollerShare finds and sends to Chromebooks, which
+announce themselves over Bluetooth only, and can be built for Oriel's own
+renderer.
 
 ### Added
 
+- Chromebooks (and other Quick Share receivers that don't announce
+  themselves on the network) appear under "Choose a device" while they're
+  visible to everyone, and files and text are sent to them over Bluetooth
+  (Linux, with BlueZ). Transfers to them stay on Bluetooth: large files are
+  slow.
 - `-Drenderer=oriel` draws HollerShare with Oriel's renderer from Zig, with
   no JavaScript: the `.oriel` views in `views/` are exported from the page
   (`views/export.js`) and `src/oriel_frontend.zig` is `app.js` in Zig. It
