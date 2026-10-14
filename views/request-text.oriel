@@ -1,0 +1,49 @@
+<style>
+  n1: margin=0,0,18,0 border-color=#b8c7a5 background=#edf0e4
+  n2: color=#292e28
+  n3: color=#292e28
+  n4: color=#71756c
+  n5: color=#292e28
+  accept: background=#d95e43 color=#fffaf4 unset="outline"
+  decline: background=#e6ebdf unset="outline"
+  n9: color=#45624b
+  @media (prefers-color-scheme: dark) {
+    n1: border-color=#56704b background=#252c22
+    n2: color=#f1eadf
+    n3: color=#f1eadf
+    n4: color=#aaa194
+    n5: color=#f1eadf
+    accept: background=#f07a5a color=#1c120e
+    decline: background=#2b3327
+    n9: color=#aec79f
+  }
+  @when (focus) {
+    accept: outline=3,3,#a5b894
+    decline: outline=3,3,#a5b894
+  }
+  @when (focus) and (prefers-color-scheme: dark) {
+    accept: outline=3,3,#9db58c
+    decline: outline=3,3,#9db58c
+  }
+  @when (hover) {
+    accept: background=#c74f36
+  }
+  @when (hover) and (prefers-color-scheme: dark) {
+    accept: background=#f5937a
+  }
+  @when (last) {
+    n1: margin=0
+  }
+</style>
+<view class="n1" padding="20" border-width="1" radius="10" unset="color font-size">
+  <text class="n2" shrink="0" margin="0,0,7,0" font-size="15" font-weight="600" font-family="DejaVu Sans, sans-serif">{title}</text>
+  <text class="n3" shrink="0" margin="0,0,10,0" font-size="14" font-weight="400" font-family="DejaVu Sans, sans-serif">{summary}</text>
+  <text class="n4" shrink="0" margin="0,0,10,0" font-size="10" font-weight="400" font-family="DejaVu Sans, sans-serif" line-height="16">Confirm that this code matches the other device before accepting.</text>
+  <text class="n5" shrink="0" margin="0,0,12,0" font-size="28" font-weight="600" font-family="DejaVu Sans, sans-serif" letter-spacing="6">{pin}</text>
+  <row wrap="wrap" margin="0" row-gap="8" column-gap="8">
+    <text id="accept" class="accept" direction="row" justify="space-between" width="auto" padding="13,16,13,16" radius="7" clickable="true" font-size="13" font-weight="600" font-family="DejaVu Sans, sans-serif" text-align="center">Accept</text>
+    <view id="decline" class="decline" justify="center" padding="10,12,10,12" radius="6" clickable="true" unset="shrink">
+      <text class="n9" shrink="0" font-size="11" font-weight="400" font-family="DejaVu Sans, sans-serif" text-align="center" nowrap="true">Decline</text>
+    </view>
+  </row>
+</view>

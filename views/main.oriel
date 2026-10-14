@@ -1,0 +1,705 @@
+<style>
+  n1: background=#f5f1e9
+  n2: color-scheme=light
+  n3: background=#f5f1e9
+  n5: padding=22,38,22,38 border-color="#292e28 #292e28 #dedfd3 #292e28"
+  brand-mark-img: src=brand-mark.png
+  n8: color=#292e28
+  visibility: padding=10,15,10,15 background=#e6ebdf unset="outline"
+  n11: color=#45624b font-size=12
+  settings-open: background=#e6ebdf unset="outline"
+  n13: color=#45624b
+  n14: padding=28,38,28,38
+  n17: color=#d95e43
+  n18: color=#292e28 font-size=48 line-height=51.84
+  n19: color=#71756c
+  n20: width=210
+  n21: width=140 height=140 border-color=#dedfd3
+  n22: width=94 height=94 background=#e6ebdf
+  n23: color=#45624b font-size=50
+  n24: color=#71756c
+  error: background=#f4dfd5 color=#93462f
+  settings: border-color=#dedfd3 background=#fcfaf5
+  n29: color=#71756c
+  n30: color=#292e28
+  settings-close: unset="outline"
+  n32: color=#71756c
+  n34: color=#292e28
+  device-name: border-color=#dedfd3 color-scheme=light background=#f5f1e9 color=#292e28 value="" unset="outline"
+  device-name-help: margin=7,0,8,0 color=#71756c
+  device-name-error: background=#f4dfd5 color=#93462f
+  download-label: color=#292e28
+  download-current: border-color=#dedfd3 background=#f5f1e9
+  n43: color=#292e28
+  download-detail: color=#71756c
+  download-browse: background=#e6ebdf unset="outline"
+  n46: color=#45624b
+  download-help: margin=0,0,8,0
+  n48: color=#71756c
+  download-default: unset="outline"
+  n50: color=#71756c
+  download-dir-error: background=#f4dfd5 color=#93462f
+  privacy-open: unset="outline"
+  n54: color=#71756c
+  n55: color=#71756c
+  settings-save: background=#d95e43 unset="outline"
+  n58: color=#fffaf4
+  n59: color=#fffaf4
+  settings-reset: background=#e6ebdf unset="outline"
+  n61: color=#45624b
+  settings-status: color=#71756c
+  privacy-policy: border-color=#dedfd3 background=#fcfaf5
+  privacy-title: color=#71756c
+  privacy-close: unset="outline"
+  n67: color=#71756c
+  n68: color=#292e28
+  n69: color=#292e28
+  n70: color=#292e28
+  n71: color=#292e28
+  n72: color=#292e28
+  n73: color=#292e28
+  n74: color=#292e28
+  n75: color=#292e28
+  n76: color=#292e28
+  n77: color=#292e28
+  n78: color=#292e28
+  n79: color=#292e28
+  n80: color=#292e28
+  n81: color=#292e28
+  n82: color=#292e28
+  n83: color=#292e28
+  n84: color=#292e28
+  n85: color=#292e28
+  n86: color=#292e28
+  n87: color=#292e28
+  n88: color=#292e28
+  n89: color=#292e28
+  requests: margin=0
+  n91: direction=row
+  n92: shrink=1 basis=0% border-color=#dedfd3 background=#fcfaf5 unset="outline"
+  n95: color=#71756c
+  n96: color=#292e28
+  clear: unset="outline"
+  n98: color=#71756c
+  mode-files: padding=10,12,10,12 background=#e6ebdf radius=6 unset="outline"
+  n101: color=#45624b nowrap=true
+  mode-text: padding=4 radius=5 unset="background outline"
+  n103: color=#71756c nowrap=false
+  n105: color=#292e28
+  clipboard-text: border-color=#dedfd3 color-scheme=light color=#292e28 value=""
+  read-clipboard: background=#e6ebdf unset="outline"
+  n109: color=#45624b
+  n110: color=#71756c
+  file-compose: unset="margin"
+  file-list: color-scheme=light
+  n114: border-color=#ddc0ae unset="background"
+  n115: color=#d95e43
+  n116: color=#292e28
+  n117: color=#71756c
+  choose: background=#d95e43 color=#fffaf4 unset="outline"
+  n119: color=#71756c
+  n120: shrink=1 basis=0% border-color=#dedfd3 background=#fcfaf5
+  n123: color=#71756c
+  n124: color=#292e28
+  peer-count: background=#e6ebdf color=#45624b
+  peers: margin=0 color-scheme=light
+  n128: color=#45624b
+  n129: color=#292e28
+  n130: color=#71756c
+  n131: color=#71756c
+  n132: border-color="#dedfd3 #292e28 #292e28 #292e28"
+  n133: color=#292e28
+  address: border-color=#dedfd3 color-scheme=light background=#f5f1e9 color=#292e28 unset="outline"
+  manual-send: background=#e6ebdf unset="outline"
+  n137: color=#45624b
+  n138: color=#71756c
+  n141: color=#292e28
+  n142: color=#71756c
+  activity-empty: border-color="#dedfd3 #71756c #71756c #71756c" color=#71756c
+  n145: border-color="#dedfd3 #71756c #71756c #71756c"
+  n146: color=#71756c
+  quit: unset="outline"
+  n148: color=#71756c
+  n149: border-color="#dedfd3 #71756c #71756c #71756c"
+  update-status: color=#71756c
+  update-check: unset="outline"
+  n152: color=#71756c
+  update-install: background=#e6ebdf unset="outline"
+  n154: color=#45624b
+  update-restart: background=#e6ebdf unset="outline"
+  n156: color=#45624b
+  n157: padding=15,38,15,38 border-color="#dedfd3 #71756c #71756c #71756c"
+  identity: color=#71756c
+  downloads: color=#71756c
+  @media (prefers-color-scheme: dark) {
+    n1: background=#1a1714
+    n2: color-scheme=dark
+    n3: background=#1a1714
+    n5: border-color="#f1eadf #f1eadf #3b342c #f1eadf"
+    brand-mark-img: src=brand-mark-dark.png
+    n8: color=#f1eadf
+    visibility: background=#2b3327
+    n11: color=#aec79f
+    settings-open: background=#2b3327
+    n13: color=#aec79f
+    n17: color=#f07a5a
+    n18: color=#f1eadf
+    n19: color=#aaa194
+    n21: border-color=#3b342c
+    n22: background=#2b3327
+    n23: color=#aec79f
+    n24: color=#aaa194
+    error: background=#41261f color=#ffbca3
+    settings: border-color=#3b342c background=#24201b
+    n29: color=#aaa194
+    n30: color=#f1eadf
+    n32: color=#aaa194
+    n34: color=#f1eadf
+    device-name: border-color=#3b342c color-scheme=dark background=#1a1714 color=#f1eadf unset="value"
+    device-name-help: color=#aaa194
+    device-name-error: background=#41261f color=#ffbca3
+    download-label: color=#f1eadf
+    download-current: border-color=#3b342c background=#1a1714
+    n43: color=#f1eadf
+    download-detail: color=#aaa194
+    download-browse: background=#2b3327
+    n46: color=#aec79f
+    n48: color=#aaa194
+    n50: color=#aaa194
+    download-dir-error: background=#41261f color=#ffbca3
+    n54: color=#aaa194
+    n55: color=#aaa194
+    settings-save: background=#f07a5a
+    n58: color=#1c120e
+    n59: color=#1c120e
+    settings-reset: background=#2b3327
+    n61: color=#aec79f
+    settings-status: color=#aaa194
+    privacy-policy: border-color=#3b342c background=#24201b
+    privacy-title: color=#aaa194
+    n67: color=#aaa194
+    n68: color=#f1eadf
+    n69: color=#f1eadf
+    n70: color=#f1eadf
+    n71: color=#f1eadf
+    n72: color=#f1eadf
+    n73: color=#f1eadf
+    n74: color=#f1eadf
+    n75: color=#f1eadf
+    n76: color=#f1eadf
+    n77: color=#f1eadf
+    n78: color=#f1eadf
+    n79: color=#f1eadf
+    n80: color=#f1eadf
+    n81: color=#f1eadf
+    n82: color=#f1eadf
+    n83: color=#f1eadf
+    n84: color=#f1eadf
+    n85: color=#f1eadf
+    n86: color=#f1eadf
+    n87: color=#f1eadf
+    n88: color=#f1eadf
+    n89: color=#f1eadf
+    n92: border-color=#3b342c background=#24201b
+    n95: color=#aaa194
+    n96: color=#f1eadf
+    n98: color=#aaa194
+    mode-files: background=#2b3327
+    n101: color=#aec79f
+    n103: color=#aaa194
+    n105: color=#f1eadf
+    clipboard-text: border-color=#3b342c color-scheme=dark color=#f1eadf unset="value"
+    read-clipboard: background=#2b3327
+    n109: color=#aec79f
+    n110: color=#aaa194
+    file-list: color-scheme=dark
+    n114: border-color=#5c4335
+    n115: color=#f07a5a
+    n116: color=#f1eadf
+    n117: color=#aaa194
+    choose: background=#f07a5a color=#1c120e
+    n119: color=#aaa194
+    n120: border-color=#3b342c background=#24201b
+    n123: color=#aaa194
+    n124: color=#f1eadf
+    peer-count: background=#2b3327 color=#aec79f
+    peers: color-scheme=dark
+    n128: color=#aec79f
+    n129: color=#f1eadf
+    n130: color=#aaa194
+    n131: color=#aaa194
+    n132: border-color="#3b342c #f1eadf #f1eadf #f1eadf"
+    n133: color=#f1eadf
+    address: border-color=#3b342c color-scheme=dark background=#1a1714 color=#f1eadf
+    manual-send: background=#2b3327
+    n137: color=#aec79f
+    n138: color=#aaa194
+    n141: color=#f1eadf
+    n142: color=#aaa194
+    activity-empty: border-color="#3b342c #aaa194 #aaa194 #aaa194" color=#aaa194
+    n145: border-color="#3b342c #aaa194 #aaa194 #aaa194"
+    n146: color=#aaa194
+    n148: color=#aaa194
+    n149: border-color="#3b342c #aaa194 #aaa194 #aaa194"
+    update-status: color=#aaa194
+    n152: color=#aaa194
+    update-install: background=#2b3327
+    n154: color=#aec79f
+    update-restart: background=#2b3327
+    n156: color=#aec79f
+    n157: border-color="#3b342c #aaa194 #aaa194 #aaa194"
+    identity: color=#aaa194
+    downloads: color=#aaa194
+  }
+  @media (max-width: 680) {
+    n5: padding=18,20,18,20
+    visibility: padding=9
+    n11: font-size=10
+    n14: padding=24,20,24,20
+    n18: font-size=39 line-height=42.12
+    n20: width=100
+    n21: width=80 height=80
+    n22: width=55 height=55
+    n23: font-size=32
+    n24: display=none
+    device-name: unset="value"
+    n91: unset="direction"
+    n92: shrink=0 unset="basis"
+    clipboard-text: unset="value"
+    n120: shrink=0 unset="basis"
+    n157: padding=15,20,15,20
+  }
+  @when (text-mode) {
+    device-name: unset="value"
+    mode-files: padding=4 radius=5 unset="background"
+    n101: color=#71756c nowrap=false
+    mode-text: padding=10,12,10,12 background=#e6ebdf radius=6
+    n103: color=#45624b nowrap=true
+    clipboard-text: unset="value"
+  }
+  @when (text-mode) and (prefers-color-scheme: dark) {
+    n101: color=#aaa194
+    mode-text: background=#2b3327
+    n103: color=#aec79f
+  }
+  @when (presence-off) {
+    visibility: background=#e6e1d8
+    n11: color=#71756c
+    device-name: unset="value"
+    clipboard-text: unset="value"
+  }
+  @when (presence-off) and (prefers-color-scheme: dark) {
+    visibility: background=#2f2a24
+    n11: color=#aaa194
+  }
+  @when (unavailable) {
+    device-name: unset="value"
+    download-current: border-color=#93462f
+    download-detail: color=#93462f
+    clipboard-text: unset="value"
+  }
+  @when (unavailable) and (prefers-color-scheme: dark) {
+    download-current: border-color=#ffbca3
+    download-detail: color=#ffbca3
+  }
+  @when (drop-hover) {
+    device-name: unset="value"
+    n92: outline=2,-6,#d95e43 outline-style=dashed
+    clipboard-text: unset="value"
+    n114: border-color=#d95e43 background=#d95e43
+    n115: color=#fffaf4
+    n116: color=#d95e43
+  }
+  @when (drop-hover) and (prefers-color-scheme: dark) {
+    n92: outline=2,-6,#f07a5a outline-style=dashed
+    n114: border-color=#f07a5a background=#f07a5a
+    n115: color=#1c120e
+    n116: color=#f07a5a
+  }
+  @when (settings-open) {
+    settings-open: background=#45624b
+    n13: color=#fffaf4
+    device-name: unset="value"
+    clipboard-text: unset="value"
+  }
+  @when (settings-open) and (prefers-color-scheme: dark) {
+    settings-open: background=#46654c
+    n13: color=#f6f1e7
+  }
+  @when (focus) {
+    visibility: outline=3,3,#a5b894
+    settings-open: outline=3,3,#a5b894
+    settings-close: outline=3,3,#a5b894
+    device-name: outline=3,3,#a5b894 unset="value"
+    download-browse: outline=3,3,#a5b894
+    download-default: outline=3,3,#a5b894
+    privacy-open: outline=3,3,#a5b894
+    settings-save: outline=3,3,#a5b894
+    settings-reset: outline=3,3,#a5b894
+    privacy-close: outline=3,3,#a5b894
+    clear: outline=3,3,#a5b894
+    mode-files: outline=3,3,#a5b894
+    mode-text: outline=3,3,#a5b894
+    clipboard-text: unset="value"
+    read-clipboard: outline=3,3,#a5b894
+    choose: outline=3,3,#a5b894
+    address: outline=3,3,#a5b894
+    manual-send: outline=3,3,#a5b894
+    quit: outline=3,3,#a5b894
+    update-check: outline=3,3,#a5b894
+    update-install: outline=3,3,#a5b894
+    update-restart: outline=3,3,#a5b894
+  }
+  @when (focus) and (prefers-color-scheme: dark) {
+    visibility: outline=3,3,#9db58c
+    settings-open: outline=3,3,#9db58c
+    settings-close: outline=3,3,#9db58c
+    device-name: outline=3,3,#9db58c
+    download-browse: outline=3,3,#9db58c
+    download-default: outline=3,3,#9db58c
+    privacy-open: outline=3,3,#9db58c
+    settings-save: outline=3,3,#9db58c
+    settings-reset: outline=3,3,#9db58c
+    privacy-close: outline=3,3,#9db58c
+    clear: outline=3,3,#9db58c
+    mode-files: outline=3,3,#9db58c
+    mode-text: outline=3,3,#9db58c
+    read-clipboard: outline=3,3,#9db58c
+    choose: outline=3,3,#9db58c
+    address: outline=3,3,#9db58c
+    manual-send: outline=3,3,#9db58c
+    quit: outline=3,3,#9db58c
+    update-check: outline=3,3,#9db58c
+    update-install: outline=3,3,#9db58c
+    update-restart: outline=3,3,#9db58c
+  }
+  @when (hover) {
+    device-name: unset="value"
+    settings-save: background=#c74f36
+    clipboard-text: unset="value"
+    choose: background=#c74f36
+  }
+  @when (hover) and (prefers-color-scheme: dark) {
+    settings-save: background=#f5937a
+    choose: background=#f5937a
+  }
+  @when (has-files) {
+    device-name: unset="value"
+    clipboard-text: unset="value"
+  }
+  @when (has-peers) {
+    device-name: unset="value"
+    clipboard-text: unset="value"
+  }
+  @when (has-requests) {
+    device-name: unset="value"
+    requests: margin=0,0,18,0
+    clipboard-text: unset="value"
+    activity-empty: display=none
+  }
+  @when (has-transfers) {
+    device-name: unset="value"
+    clipboard-text: unset="value"
+    activity-empty: display=none
+  }
+  @when (no-error) {
+    error: display=none
+    device-name: unset="value"
+    clipboard-text: unset="value"
+  }
+  @when (no-settings) {
+    settings: display=none
+    clipboard-text: unset="value"
+  }
+  @when (no-privacy-policy) {
+    privacy-policy: display=none
+    clipboard-text: unset="value"
+  }
+  @when (no-text-compose) {
+    device-name: unset="value"
+    text-compose: display=none
+    file-compose: margin=0
+  }
+  @when (no-file-compose) {
+    device-name: unset="value"
+    file-compose: display=none
+  }
+  @when (no-clear) {
+    device-name: unset="value"
+    clear: display=none
+    clipboard-text: unset="value"
+  }
+  @when (no-file-empty) {
+    device-name: unset="value"
+    clipboard-text: unset="value"
+    file-empty: display=none
+  }
+  @when (no-peer-empty) {
+    device-name: unset="value"
+    clipboard-text: unset="value"
+    peers: margin=0,0,10,0
+    peer-empty: display=none
+  }
+  @when (no-update-install) {
+    device-name: unset="value"
+    clipboard-text: unset="value"
+    update-install: display=none
+  }
+  @when (no-update-restart) {
+    device-name: unset="value"
+    clipboard-text: unset="value"
+    update-restart: display=none
+  }
+  @when (no-update-check) {
+    device-name: unset="value"
+    clipboard-text: unset="value"
+    update-check: display=none
+  }
+  @when (no-device-name-error) {
+    device-name: unset="value"
+    device-name-help: margin=7,0,0,0
+    device-name-error: display=none
+    clipboard-text: unset="value"
+  }
+  @when (no-download-dir-error) {
+    device-name: unset="value"
+    download-help: margin=0
+    download-dir-error: display=none
+    clipboard-text: unset="value"
+  }
+  @when (no-download-detail) {
+    device-name: unset="value"
+    download-detail: display=none
+    clipboard-text: unset="value"
+  }
+  @when (no-download-browse) {
+    device-name: unset="value"
+    download-browse: display=none
+    clipboard-text: unset="value"
+  }
+</style>
+<view class="n1" root="true" unset="shrink color font-size">
+  <view class="n2" grow="1" shrink="1" scroll="true">
+    <view class="n3">
+      <view width="100%" max-width="1120" margin="0,auto,0,auto">
+        <row class="n5" justify="space-between" align="center" border-width="0,0,1,0">
+          <row align="center" row-gap="10" column-gap="10" unset="shrink">
+            <image id="brand-mark-img" class="brand-mark-img" width="36" height="36" />
+            <text class="n8" font-size="23" font-weight="700" font-family="DejaVu Sans, sans-serif" letter-spacing="-1">HollerShare</text>
+          </row>
+          <row align="center" row-gap="8" column-gap="8" unset="shrink">
+            <view id="visibility" class="visibility" justify="center" radius="24" clickable="true" unset="shrink">
+              <text class="n11" shrink="0" font-weight="400" font-family="DejaVu Sans, sans-serif" text-align="center">{visibility}</text>
+            </view>
+            <row id="settings-open" class="settings-open" justify="center" align="center" width="38" height="38" padding="3,7,4,7" radius="19" clickable="true" unset="shrink">
+              <text class="n13" shrink="1" font-size="18" font-weight="400" font-family="DejaVu Sans, sans-serif" line-height="18" text-align="center">⚙</text>
+            </row>
+          </row>
+        </row>
+        <view class="n14">
+          <row justify="space-between" align="center" margin="0,0,30,0">
+            <view unset="shrink">
+              <text class="n17" shrink="0" margin="0,0,16,0" font-size="10" font-weight="700" font-family="DejaVu Sans, sans-serif" line-height="16" letter-spacing="2">A LITTLE CLOSER. A LOT EASIER.</text>
+              <text class="n18" shrink="0" margin="0,0,18,0" font-weight="400" font-family="DejaVu Serif, serif" letter-spacing="-2"><span>From here</span><span>&#10;</span><span>to over there.</span></text>
+              <text class="n19" shrink="0" margin="0" font-size="13" font-weight="400" font-family="DejaVu Sans, sans-serif" line-height="22.1"><span>Share files and text with computers and Android.</span><span>&#10;</span><span>Same network. No accounts. Just Quick Share.</span></text>
+            </view>
+            <view class="n20" align="center" row-gap="15" column-gap="15" unset="shrink">
+              <row class="n21" justify="center" align="center" border-width="1" radius="70" unset="shrink">
+                <row class="n22" justify="center" align="center" radius="47" unset="shrink">
+                  <text class="n23" shrink="1" font-weight="400" font-family="DejaVu Sans, sans-serif">↗</text>
+                </row>
+              </row>
+              <text class="n24" shrink="0" font-size="9" font-weight="400" font-family="DejaVu Sans, sans-serif" letter-spacing="2">GOOD THINGS TRAVEL.</text>
+            </view>
+          </row>
+          <text id="error" class="error" shrink="0" margin="0,0,18,0" padding="16" radius="8" font-size="12" font-weight="400" font-family="DejaVu Sans, sans-serif">{error}</text>
+          <view id="settings" class="settings" grow="1" shrink="1" basis="0%" min-width="0" margin="0,0,18,0" padding="22" border-width="1" radius="12">
+            <row justify="space-between" align="center" margin="0,0,18,0" row-gap="10" column-gap="10">
+              <row id="settings-title" align="baseline" unset="shrink">
+                <text class="n29" shrink="1" font-size="12" font-weight="400" font-family="DejaVu Sans, sans-serif">Settings&#32;</text>
+                <text class="n30" shrink="0" margin="0,0,0,8" font-size="14" font-weight="600" font-family="DejaVu Sans, sans-serif">How others see you, where files land</text>
+              </row>
+              <view id="settings-close" class="settings-close" justify="center" padding="4" radius="5" clickable="true" unset="shrink">
+                <text class="n32" shrink="0" font-size="11" font-weight="400" font-family="DejaVu Sans, sans-serif" text-align="center">Close</text>
+              </view>
+            </row>
+            <view margin="0,0,16,0">
+              <text class="n34" shrink="0" margin="0,0,8,0" clickable="true" font-size="11" font-weight="600" font-family="DejaVu Sans, sans-serif">Device name</text>
+              <input id="device-name" class="device-name" align-self="flex-start" width="100%" min-width="0" padding="10" border-width="1" radius="6" font-size="11" font-weight="400" font-family="DejaVu Sans, sans-serif" placeholder="" cols="20" autocapitalize="sentences" spellcheck="false" label="Device name" />
+              <text id="device-name-help" class="device-name-help" shrink="0" font-size="10" font-weight="400" font-family="DejaVu Sans, sans-serif" line-height="16">The name nearby devices see. Leave it empty to use this device’s name.</text>
+              <text id="device-name-error" class="device-name-error" shrink="0" margin="0" padding="8,10,8,10" radius="6" font-size="11" font-weight="400" font-family="DejaVu Sans, sans-serif" line-height="17.6">{device-name-error}</text>
+            </view>
+            <view margin="0,0,16,0">
+              <text id="download-label" class="download-label" shrink="0" margin="0,0,8,0" clickable="true" font-size="11" font-weight="600" font-family="DejaVu Sans, sans-serif">Save received files to</text>
+              <row margin="0,0,7,0" row-gap="7" column-gap="7">
+                <view id="download-current" class="download-current" justify="center" grow="1" shrink="1" basis="0%" min-width="0" padding="10" border-width="1" row-gap="3" column-gap="3" radius="6">
+                  <view id="download-name" clip="true" unset="shrink">
+                    <text class="n43" shrink="0" font-size="11" font-weight="600" font-family="DejaVu Sans, sans-serif" nowrap="true">{download-name}</text>
+                  </view>
+                  <text id="download-detail" class="download-detail" shrink="0" font-size="10" font-weight="400" font-family="DejaVu Sans, sans-serif">{download-detail}</text>
+                </view>
+                <view id="download-browse" class="download-browse" justify="center" padding="10,12,10,12" radius="6" clickable="true" unset="shrink">
+                  <text class="n46" shrink="0" font-size="11" font-weight="400" font-family="DejaVu Sans, sans-serif" text-align="center" nowrap="true">Choose…</text>
+                </view>
+              </row>
+              <row id="download-help" class="download-help" align="baseline">
+                <text class="n48" shrink="1" font-size="10" font-weight="400" font-family="DejaVu Sans, sans-serif" line-height="16"><span>{download-help-text}</span><span>&#32;</span></text>
+                <view id="download-default" class="download-default" justify="center" padding="0,2,0,2" radius="5" clickable="true">
+                  <text class="n50" shrink="0" font-size="10" font-weight="400" font-family="DejaVu Sans, sans-serif" line-height="16" text-align="center"><span underline="true">{download-default}</span></text>
+                </view>
+              </row>
+              <text id="download-dir-error" class="download-dir-error" shrink="0" margin="0" padding="8,10,8,10" radius="6" font-size="11" font-weight="400" font-family="DejaVu Sans, sans-serif" line-height="17.6">{download-dir-error}</text>
+            </view>
+            <view margin="0,0,16,0">
+              <view id="privacy-open" class="privacy-open" justify="center" align-self="flex-start" padding="0,2,0,2" radius="5" clickable="true">
+                <text class="n54" shrink="0" font-size="10" font-weight="400" font-family="DejaVu Sans, sans-serif" text-align="center"><span underline="true">Privacy policy</span></text>
+              </view>
+              <text class="n55" shrink="0" margin="7,0,0,0" font-size="10" font-weight="400" font-family="DejaVu Sans, sans-serif" line-height="16">How HollerShare handles files, text and device information.</text>
+            </view>
+            <row wrap="wrap" align="center" margin="0" row-gap="8" column-gap="8">
+              <row id="settings-save" class="settings-save" justify="space-between" width="auto" padding="13,16,13,16" row-gap="10" column-gap="10" radius="7" clickable="true" unset="shrink">
+                <text class="n58" shrink="1" font-size="13" font-weight="600" font-family="DejaVu Sans, sans-serif" text-align="center">Save</text>
+                <text class="n59" clickable="true" font-size="13" font-weight="600" font-family="DejaVu Sans, sans-serif" text-align="center">✓</text>
+              </row>
+              <view id="settings-reset" class="settings-reset" justify="center" padding="10,12,10,12" radius="6" clickable="true" unset="shrink">
+                <text class="n61" shrink="0" font-size="11" font-weight="400" font-family="DejaVu Sans, sans-serif" text-align="center" nowrap="true">Reset to defaults</text>
+              </view>
+              <text id="settings-status" class="settings-status" font-size="10" font-weight="400" font-family="DejaVu Sans, sans-serif" line-height="16">{settings-status}</text>
+            </row>
+          </view>
+          <view id="privacy-policy" class="privacy-policy" grow="1" shrink="1" basis="0%" min-width="0" margin="0,0,24,0" padding="22" border-width="1" radius="12">
+            <row justify="space-between" align="center" margin="0,0,18,0" row-gap="10" column-gap="10">
+              <text id="privacy-title" class="privacy-title" font-size="12" font-weight="400" font-family="DejaVu Sans, sans-serif">Privacy policy</text>
+              <view id="privacy-close" class="privacy-close" justify="center" padding="4" radius="5" clickable="true" unset="shrink">
+                <text class="n67" shrink="0" font-size="11" font-weight="400" font-family="DejaVu Sans, sans-serif" text-align="center">Close</text>
+              </view>
+            </row>
+            <text class="n68" shrink="0" margin="0,0,24,0" font-size="14" font-weight="400" font-family="DejaVu Sans, sans-serif" line-height="23.1">Effective date: October 6, 2026.</text>
+            <text class="n69" shrink="0" margin="0,0,14,0" font-size="16" font-weight="600" font-family="DejaVu Sans, sans-serif">Who provides HollerShare</text>
+            <text class="n70" shrink="0" margin="0,0,24,0" font-size="14" font-weight="400" font-family="DejaVu Sans, sans-serif" line-height="23.1"><span>HollerShare is an open-source file and text sharing application provided by Sergio A Marin (GitHub: highercomve). This policy covers the Android and desktop application and the HollerShare website. For privacy inquiries, email </span><span underline="true" link="link-1073741945-37">sergio.alejandro.mz@gmail.com</span><span>. You can also use </span><span underline="true" link="link-1073741948-37">the project's support page</span><span>. Public issues are visible to everyone; do not post private files, clipboard text or other sensitive information there.</span></text>
+            <text class="n71" shrink="0" margin="0,0,14,0" font-size="16" font-weight="600" font-family="DejaVu Sans, sans-serif">Files and text you choose to share</text>
+            <text class="n72" shrink="0" margin="0,0,14,0" font-size="14" font-weight="400" font-family="DejaVu Sans, sans-serif" line-height="23.1">HollerShare accesses files you select or receive, and text you type, paste or explicitly read from the clipboard. It sends that content directly to the device you choose using encrypted Quick Share transfers. The recipient can keep, copy or share the content after receiving it. HollerShare does not upload transfer contents to a service operated by the maintainer.</text>
+            <text class="n73" shrink="0" margin="0,0,24,0" font-size="14" font-weight="400" font-family="DejaVu Sans, sans-serif" line-height="23.1">Incoming transfers require your acceptance. After you accept a text transfer, HollerShare copies the received text to your device's clipboard automatically. Your operating system and other applications with clipboard access may then be able to read it. Received files are saved on your device, in the default location or the folder you choose.</text>
+            <text class="n74" shrink="0" margin="0,0,14,0" font-size="16" font-weight="600" font-family="DejaVu Sans, sans-serif">Nearby discovery and permissions</text>
+            <text class="n75" shrink="0" margin="0,0,14,0" font-size="14" font-weight="400" font-family="DejaVu Sans, sans-serif" line-height="23.1">When visibility and discovery are enabled, nearby devices can receive your advertised device name, device type, discovery identifiers and network address. The default name may be your system's device name; you can change it in Settings. Discovery uses local-network announcements and, where available, Bluetooth. These discovery announcements are not encrypted and can be observed by other nearby devices before you accept a transfer. They are separate from the encrypted file and text transfer channel.</text>
+            <text class="n76" shrink="0" margin="0,0,14,0" font-size="14" font-weight="400" font-family="DejaVu Sans, sans-serif" line-height="23.1">HollerShare sends and receives this discovery information to identify available peers and establish direct connections. It is used for the sharing function, not advertising, analytics or tracking by the maintainer. The maintainer does not operate a server that receives this information. You can stop advertising your device by turning visibility off, change the advertised name, and revoke nearby-device permissions in Android settings.</text>
+            <text class="n77" shrink="0" margin="0,0,24,0" font-size="14" font-weight="400" font-family="DejaVu Sans, sans-serif" line-height="23.1">HollerShare requests nearby Wi-Fi and Bluetooth permissions to find devices and advertise availability. Android 11 and earlier may require location permission for Bluetooth discovery; HollerShare does not use it to obtain your geographic location. Notifications announce incoming requests and completed transfers. File and folder pickers grant access to the content or destination you select. You can revoke these permissions in Android settings, which may limit sharing features.</text>
+            <text class="n78" shrink="0" margin="0,0,14,0" font-size="16" font-weight="600" font-family="DejaVu Sans, sans-serif">Information stored on your device</text>
+            <text class="n79" shrink="0" margin="0,0,14,0" font-size="14" font-weight="400" font-family="DejaVu Sans, sans-serif" line-height="23.1">HollerShare stores settings, including your device name and received-files folder, on your device. It keeps transfer status and metadata while running. Local diagnostic logs may contain device names, network addresses, file names and transfer information. The app does not automatically send these logs to the maintainer.</text>
+            <text class="n80" shrink="0" margin="0,0,24,0" font-size="14" font-weight="400" font-family="DejaVu Sans, sans-serif" line-height="23.1">Settings remain until reset, removed or cleared through the operating system. Received files remain until you delete them. Clearing app data or uninstalling may remove app-owned files and settings; files saved to a separately chosen folder can remain there. Clipboard contents follow your operating system's clipboard retention rules. Recipients control their own copies, and HollerShare cannot delete them remotely.</text>
+            <text class="n81" shrink="0" margin="0,0,14,0" font-size="16" font-weight="600" font-family="DejaVu Sans, sans-serif">Update checks and external services</text>
+            <text class="n82" shrink="0" margin="0,0,14,0" font-size="14" font-weight="400" font-family="DejaVu Sans, sans-serif" line-height="23.1">The GitHub-distributed application contacts GitHub to check for releases and, where supported, download updates. GitHub receives ordinary connection information such as your IP address and request headers. The Google Play build uses Google Play for updates and does not make HollerShare's GitHub update checks.</text>
+            <text class="n83" shrink="0" margin="0,0,24,0" font-size="14" font-weight="400" font-family="DejaVu Sans, sans-serif" line-height="23.1">Downloading the app, visiting GitHub support pages or installing it through Google Play also involves those services. Their own privacy policies apply. HollerShare includes no advertising SDK, analytics SDK, account system or automatic crash-report upload.</text>
+            <text class="n84" shrink="0" margin="0,0,14,0" font-size="16" font-weight="600" font-family="DejaVu Sans, sans-serif">The website</text>
+            <text class="n85" shrink="0" margin="0,0,24,0" font-size="14" font-weight="400" font-family="DejaVu Sans, sans-serif" line-height="23.1"><span>The website is hosted by GitHub Pages. It uses no analytics, tracking cookies or third-party font service. GitHub may process connection information, including IP addresses and request logs, to provide hosting. Download and support links lead to GitHub. See </span><span underline="true" link="link-1073741996-37">GitHub's privacy statement</span><span> and </span><span underline="true" link="link-1073741999-37">Google's privacy policy</span><span> for their services.</span></text>
+            <text class="n86" shrink="0" margin="0,0,14,0" font-size="16" font-weight="600" font-family="DejaVu Sans, sans-serif">Security and your choices</text>
+            <text class="n87" shrink="0" margin="0,0,24,0" font-size="14" font-weight="400" font-family="DejaVu Sans, sans-serif" line-height="23.1">File and text transfers use Quick Share encryption in transit between the participating devices. Nearby discovery announcements are not encrypted, so HollerShare does not claim that every item of information sent off your device is encrypted. Check the receiving device and incoming request before sharing. Encryption does not prevent a chosen recipient from keeping the content. Use the visibility control to stop advertising availability, choose a less identifying device name, revoke permissions, and delete received files or app data when no longer needed.</text>
+            <text class="n88" shrink="0" margin="0,0,14,0" font-size="16" font-weight="600" font-family="DejaVu Sans, sans-serif">Changes to this policy</text>
+            <text class="n89" shrink="0" margin="0,0,14,0" font-size="14" font-weight="400" font-family="DejaVu Sans, sans-serif" line-height="23.1"><span>Updates are published at </span><span underline="true" link="link-1073742014-37">the HollerShare privacy policy URL</span><span> with a revised effective date. App releases include an offline copy of the policy current at build time.</span></text>
+          </view>
+          <view id="requests" class="requests" />
+          <view class="n91" margin="0,0,25,0" row-gap="18" column-gap="18">
+            <view class="n92" grow="1" min-width="0" padding="22" border-width="1" radius="12">
+              <row justify="space-between" align="center" margin="0,0,18,0" row-gap="10" column-gap="10">
+                <row align="baseline" unset="shrink">
+                  <text class="n95" shrink="1" font-size="12" font-weight="400" font-family="DejaVu Sans, sans-serif">01&#32;</text>
+                  <text class="n96" shrink="0" margin="0,0,0,8" font-size="14" font-weight="600" font-family="DejaVu Sans, sans-serif">Choose what to share</text>
+                </row>
+                <view id="clear" class="clear" justify="center" padding="4" radius="5" clickable="true" unset="shrink">
+                  <text class="n98" shrink="0" font-size="11" font-weight="400" font-family="DejaVu Sans, sans-serif" text-align="center">Clear</text>
+                </view>
+              </row>
+              <row margin="0,0,18,0" row-gap="8" column-gap="8">
+                <view id="mode-files" class="mode-files" justify="center" clickable="true" unset="shrink">
+                  <text class="n101" shrink="0" font-size="11" font-weight="400" font-family="DejaVu Sans, sans-serif" text-align="center">Files</text>
+                </view>
+                <view id="mode-text" class="mode-text" justify="center" clickable="true" unset="shrink">
+                  <text class="n103" shrink="0" font-size="11" font-weight="400" font-family="DejaVu Sans, sans-serif" text-align="center">Clipboard text</text>
+                </view>
+              </row>
+              <view id="text-compose" class="text-compose" margin="0">
+                <text class="n105" shrink="0" margin="0,0,8,0" clickable="true" font-size="14" font-weight="600" font-family="DejaVu Sans, sans-serif">Text to share</text>
+                <row wrap="wrap" align="baseline">
+                  <textarea id="clipboard-text" class="clipboard-text" width="100%" min-height="130" margin="0,0,12,0" padding="12" border-width="1" radius="8" font-weight="400" font-family="DejaVu Sans, sans-serif" placeholder="Paste or type text to send" cols="20" rows="5" autocapitalize="sentences" label="Text to share" />
+                  <view id="read-clipboard" class="read-clipboard" justify="center" padding="10,12,10,12" radius="6" clickable="true">
+                    <text class="n109" shrink="0" font-size="11" font-weight="400" font-family="DejaVu Sans, sans-serif" text-align="center" nowrap="true">Paste clipboard</text>
+                  </view>
+                </row>
+                <text class="n110" shrink="0" margin="12,0,0,0" font-size="10" font-weight="400" font-family="DejaVu Sans, sans-serif" line-height="16" text-align="center">Review your text, then choose a device. Up to 1 MB.</text>
+              </view>
+              <view id="file-compose" class="file-compose">
+                <view id="file-list" class="file-list" max-height="230" margin="0,0,12,0" scroll="true" scroll-x="true" />
+                <view id="file-empty" class="file-empty" margin="0" padding="22,0,16,0">
+                  <row class="n114" justify="center" align="center" width="48" height="54" margin="0,auto,12,auto" border-width="1" radius="5">
+                    <text class="n115" shrink="1" font-size="28" font-weight="400" font-family="DejaVu Sans, sans-serif" text-align="center">＋</text>
+                  </row>
+                  <text class="n116" shrink="0" margin="0,0,12,0" font-size="15" font-weight="600" font-family="DejaVu Sans, sans-serif" text-align="center">A small file. A big idea.</text>
+                  <text class="n117" shrink="0" margin="0,0,12,0" font-size="12" font-weight="400" font-family="DejaVu Sans, sans-serif" line-height="19.2" text-align="center"><span>Drop files on this card, or pick something to send,</span><span>&#10;</span><span>then choose where it should go.</span></text>
+                </view>
+                <text id="choose" class="choose" direction="row" justify="space-between" shrink="0" width="100%" margin="0,0,12,0" padding="13,16,13,16" radius="7" clickable="true" font-size="13" font-weight="600" font-family="DejaVu Sans, sans-serif" text-align="center">{choose}</text>
+                <text class="n119" shrink="0" margin="0" font-size="10" font-weight="400" font-family="DejaVu Sans, sans-serif" line-height="16" text-align="center">Add files one at a time. Send them together.</text>
+              </view>
+            </view>
+            <view class="n120" grow="1" min-width="0" padding="22" border-width="1" radius="12">
+              <row justify="space-between" align="center" margin="0,0,18,0" row-gap="10" column-gap="10">
+                <row align="baseline" unset="shrink">
+                  <text class="n123" shrink="1" font-size="12" font-weight="400" font-family="DejaVu Sans, sans-serif">02&#32;</text>
+                  <text class="n124" shrink="0" margin="0,0,0,8" font-size="14" font-weight="600" font-family="DejaVu Sans, sans-serif">Choose a device</text>
+                </row>
+                <text id="peer-count" class="peer-count" padding="4,8,4,8" radius="20" font-size="10" font-weight="400" font-family="DejaVu Sans, sans-serif">{peer-count}</text>
+              </row>
+              <view id="peers" class="peers" max-height="260" scroll="true" scroll-x="true" />
+              <view id="peer-empty" class="peer-empty" margin="0,0,10,0" padding="5,0,12,0">
+                <text class="n128" shrink="0" margin="0,0,12,0" font-size="33" font-weight="400" font-family="DejaVu Sans, sans-serif">◎</text>
+                <text class="n129" shrink="0" margin="0,0,8,0" font-size="15" font-weight="600" font-family="DejaVu Sans, sans-serif">Looking around…</text>
+                <text class="n130" shrink="0" margin="0,0,8,0" font-size="12" font-weight="400" font-family="DejaVu Sans, sans-serif" line-height="19.2">Open HollerShare on your other computer, or open Quick Share on Android and turn on receiving.</text>
+                <text class="n131" shrink="0" margin="0,0,8,0" font-size="10" font-weight="400" font-family="DejaVu Sans, sans-serif" line-height="16">Keep both devices on the same Wi-Fi network. Bluetooth helps Android discovery.</text>
+              </view>
+              <view class="n132" margin="0" padding="14,0,0,0" border-width="1,0,0,0">
+                <text class="n133" shrink="0" font-size="14" font-weight="400" font-family="DejaVu Sans, sans-serif"><span font-size="11" font-weight="600" link="link-1073742091-38">Have an address?</span></text>
+                <row margin="8,0,7,0" row-gap="7" column-gap="7">
+                  <input id="address" class="address" width="100%" min-width="0" padding="10" border-width="1" radius="6" font-size="11" font-weight="400" font-family="DejaVu Sans, sans-serif" placeholder="192.168.1.20:54321" cols="20" autocapitalize="sentences" label="Device IP address and port" unset="shrink" />
+                  <view id="manual-send" class="manual-send" justify="center" padding="10,12,10,12" radius="6" opacity="0.45" clickable="true" disabled="true" unset="shrink">
+                    <text class="n137" shrink="0" font-size="11" font-weight="400" font-family="DejaVu Sans, sans-serif" text-align="center" nowrap="true">Send ↗</text>
+                  </view>
+                </row>
+                <text class="n138" shrink="0" margin="0" font-size="10" font-weight="400" font-family="DejaVu Sans, sans-serif" line-height="16">The destination must speak Quick Share.</text>
+              </view>
+            </view>
+          </view>
+          <view margin="0,0,22,0">
+            <row justify="space-between" align="center" margin="0,0,18,0" row-gap="10" column-gap="10">
+              <text class="n141" font-size="14" font-weight="600" font-family="DejaVu Sans, sans-serif">Activity</text>
+              <text class="n142" font-size="10" font-weight="400" font-family="DejaVu Sans, sans-serif" line-height="16">Direct, encrypted transfers</text>
+            </row>
+            <view id="transfers" margin="0">
+              <text id="activity-empty" class="activity-empty" shrink="0" margin="0" padding="18,0,0,0" border-width="1,0,0,0" font-size="12" font-weight="400" font-family="DejaVu Sans, sans-serif" line-height="19.2">Your files’ next adventure starts here.</text>
+            </view>
+          </view>
+          <row class="n145" align="baseline" margin="0,0,10,0" padding="14,0,0,0" border-width="1,0,0,0">
+            <text class="n146" shrink="1" font-size="10" font-weight="400" font-family="DejaVu Sans, sans-serif" line-height="16">Close the window to keep receiving. Use the tray to send files or reopen HollerShare.&#32;</text>
+            <view id="quit" class="quit" justify="center" padding="4" radius="5" clickable="true">
+              <text class="n148" shrink="0" font-size="11" font-weight="400" font-family="DejaVu Sans, sans-serif" line-height="17.6" text-align="center">Quit HollerShare</text>
+            </view>
+          </row>
+        </view>
+        <row class="n149" wrap="wrap" align="center" padding="12,38,12,38" border-width="1,0,0,0" row-gap="12" column-gap="12">
+          <text id="update-status" class="update-status" font-size="11" font-weight="400" font-family="DejaVu Sans, sans-serif">{update-status}</text>
+          <view id="update-check" class="update-check" justify="center" padding="4" radius="5" clickable="true" unset="shrink">
+            <text class="n152" shrink="0" font-size="11" font-weight="400" font-family="DejaVu Sans, sans-serif" text-align="center">Check for updates</text>
+          </view>
+          <view id="update-install" class="update-install" justify="center" padding="10,12,10,12" radius="6" clickable="true" unset="shrink">
+            <text class="n154" shrink="0" font-size="11" font-weight="400" font-family="DejaVu Sans, sans-serif" text-align="center" nowrap="true">Install update</text>
+          </view>
+          <view id="update-restart" class="update-restart" justify="center" padding="10,12,10,12" radius="6" clickable="true" unset="shrink">
+            <text class="n156" shrink="0" font-size="11" font-weight="400" font-family="DejaVu Sans, sans-serif" text-align="center" nowrap="true">Restart now</text>
+          </view>
+        </row>
+        <row class="n157" wrap="wrap" justify="space-between" border-width="1,0,0,0" row-gap="10" column-gap="10">
+          <text id="identity" class="identity" font-size="10" font-weight="400" font-family="DejaVu Sans, sans-serif">{identity}</text>
+          <text id="downloads" class="downloads" font-size="10" font-weight="400" font-family="DejaVu Sans, sans-serif">{downloads}</text>
+        </row>
+      </view>
+    </view>
+  </view>
+</view>

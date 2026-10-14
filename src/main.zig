@@ -884,6 +884,7 @@ pub fn main(init: std.process.Init) !u8 {
         if (desktop_linux) hollershare_desktop_cleanup();
     }
     if (desktop_linux) try oriel.hooks.subscribe(.{ .window_created = window_created, .window_destroyed = window_destroyed });
+    if (oriel.options.zig_ui) @import("oriel_frontend.zig").configure(init.io);
     return oriel.main(init, .{ .commands = Commands, .events = Events }, .{
         .app = app.build,
         .window = .{

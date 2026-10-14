@@ -1,0 +1,17 @@
+<style>
+  open: background=#e6ebdf unset="outline"
+  n2: color=#45624b
+  @media (prefers-color-scheme: dark) {
+    open: background=#2b3327
+    n2: color=#aec79f
+  }
+  @when (focus) {
+    open: outline=3,3,#a5b894
+  }
+  @when (focus) and (prefers-color-scheme: dark) {
+    open: outline=3,3,#9db58c
+  }
+</style>
+<view id="open" class="open" justify="center" padding="10,12,10,12" radius="6" clickable="true" unset="shrink color font-size">
+  <text class="n2" shrink="0" font-size="11" font-weight="400" font-family="DejaVu Sans, sans-serif" text-align="center" nowrap="true">{label}</text>
+</view>

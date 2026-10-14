@@ -9,6 +9,11 @@ pub fn build(b: *std.Build) void {
     const android = target.result.abi == .android;
     const version = std.mem.trimStart(u8, b.option([]const u8, "app-version", "Package version") orelse b.graph.environ_map.get("HOLLERSHARE_VERSION") orelse "1.0.5", "v");
     _ = std.SemanticVersion.parse(version) catch @panic("Package version must be semantic version, e.g. 0.1.0");
+    // How the window is drawn: the page in a WebView, the page on native
+    // widgets (the default), or the .oriel views in views/ from Zig
+    // (src/oriel_frontend.zig), without JavaScript.
+    const Renderer = enum { webview, native, oriel };
+    const renderer = b.option(Renderer, "renderer", "Renderer: webview, native (default), or oriel (.oriel views)") orelse .native;
     // Oriel's built-in modules and plugins. Switch on what the app uses:
     // anything left off is neither compiled nor linked.
     const dep = b.dependency("oriel", .{
@@ -18,7 +23,8 @@ pub fn build(b: *std.Build) void {
         .menu = false,
         .store = false, // settings.json lives in oriel.paths.appData
         .dialog = true,
-        .native_ui = b.option(bool, "native_ui", "Use the native renderer") orelse true,
+        .native_ui = renderer != .webview,
+        .zig_ui = renderer == .oriel,
         .notification = true,
         .updater = true,
         .sql = false,
@@ -37,16 +43,24 @@ pub fn build(b: *std.Build) void {
     const config = b.addOptions();
     config.addOption([]const u8, "version", version);
     config.addOption(bool, "play_store", b.option(bool, "play-store", "Use Google Play for Android updates") orelse false);
+    // The Oriel renderer's views, embedded by name (@embedFile("main.oriel")):
+    // views/ is outside src/, the app module's root.
+    const view_names = [_][]const u8{ "main", "file-row", "peer-row", "request", "request-text", "transfer-active", "transfer-done", "transfer-text", "transfer-ended", "open-button" };
+    var imports: [2 + view_names.len]std.Build.Module.Import = undefined;
+    imports[0] = .{ .name = "hollershare_config", .module = config.createModule() };
+    imports[1] = .{ .name = "tray_icon", .module = b.createModule(.{ .root_source_file = b.path("assets/brand/tray-icon.zig") }) };
+    for (view_names, imports[2..]) |name, *view| view.* = .{
+        .name = b.fmt("{s}.oriel", .{name}),
+        .module = b.createModule(.{ .root_source_file = b.path(b.fmt("views/{s}.oriel", .{name})) }),
+    };
     const application = oriel.addApp(b, dep, .{
         .name = "hollershare",
-        .imports = &.{
-            .{ .name = "hollershare_config", .module = config.createModule() },
-            .{ .name = "tray_icon", .module = b.createModule(.{ .root_source_file = b.path("assets/brand/tray-icon.zig") }) },
-        },
+        .imports = &imports,
         .root_source_file = b.path("src/main.zig"),
         .icon = b.path("assets/brand/hollershare-icon.png"), // High-resolution PNG (1024x1024 recommended)
         .frontend = .{
-            // A static page: embedded as-is, no npm and no dev server.
+            // A static page: embedded as-is, no npm and no dev server. The
+            // Oriel renderer's views use its images too.
             .dir = "frontend",
             .dist = ".",
             .build_command = null,

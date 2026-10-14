@@ -38,9 +38,9 @@ if ! "$skip_build"; then
             printf 'ORIEL_FORK requires an Oriel CLI with --fork support. Update the Oriel CLI and retry.\n' >&2
             exit 1
         fi
-        oriel build --fork="$fork_dir" -Doptimize=ReleaseSafe -Dnative_ui "${build_flags[@]}"
+        oriel build --fork="$fork_dir" -Doptimize=ReleaseSafe "${build_flags[@]}"
     else
-        zig build -Doptimize=ReleaseSafe -Dnative_ui "${build_flags[@]}"
+        zig build -Doptimize=ReleaseSafe "${build_flags[@]}"
     fi
 fi
 

@@ -1,0 +1,41 @@
+<style>
+  n1: border-width=1,0,0,0 border-color="#dedfd3 #292e28 #292e28 #292e28"
+  n2: background=#e6ebdf
+  n3: color=#45624b
+  n6: color=#292e28
+  n7: color=#71756c
+  send: background=#45624b unset="outline"
+  n9: color=#fffaf4
+  @media (prefers-color-scheme: dark) {
+    n1: border-color="#3b342c #f1eadf #f1eadf #f1eadf"
+    n2: background=#2b3327
+    n3: color=#aec79f
+    n6: color=#f1eadf
+    n7: color=#aaa194
+    send: background=#46654c
+    n9: color=#f6f1e7
+  }
+  @when (focus) {
+    send: outline=3,3,#a5b894
+  }
+  @when (focus) and (prefers-color-scheme: dark) {
+    send: outline=3,3,#9db58c
+  }
+  @when (first) {
+    n1: unset="border-width border-color"
+  }
+</style>
+<row class="n1" align="center" padding="12,0,12,0" row-gap="12" column-gap="12" unset="color font-size">
+  <row class="n2" justify="center" align="center" width="35" height="35" radius="8" unset="shrink">
+    <text class="n3" shrink="1" font-size="20" font-weight="400" font-family="DejaVu Sans, sans-serif">{icon}</text>
+  </row>
+  <view grow="1" shrink="1" basis="0%" min-width="0">
+    <view clip="true">
+      <text class="n6" shrink="0" font-size="12" font-weight="600" font-family="DejaVu Sans, sans-serif" nowrap="true">{name}</text>
+    </view>
+    <text class="n7" shrink="0" font-size="10" font-weight="400" font-family="DejaVu Sans, sans-serif" line-height="16">{detail}</text>
+  </view>
+  <view id="send" class="send" justify="center" padding="9,11,9,11" radius="6" opacity="0.45" clickable="true" disabled="true" unset="shrink">
+    <text class="n9" shrink="0" font-size="11" font-weight="400" font-family="DejaVu Sans, sans-serif" text-align="center">Send ↗</text>
+  </view>
+</row>
