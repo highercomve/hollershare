@@ -154,16 +154,29 @@ impl TcpServer {
         si: SendInfo,
     ) -> Result<(), anyhow::Error> {
         debug!("{INNER_NAME}: Connecting to: {}", si.addr);
-        let socket = tokio::time::timeout(
-            std::time::Duration::from_secs(5),
-            TcpStream::connect(si.addr.clone()),
-        )
-        .await??;
+        use crate::location_nearby_connections::bandwidth_upgrade_negotiation_frame::upgrade_path_info::Medium;
+        // A receiver found over Bluetooth (`bt:` address): RFCOMM, where the
+        // transfer stays; else TCP, which it may upgrade within the LAN.
+        #[cfg(all(feature = "experimental", target_os = "linux"))]
+        let bluetooth = crate::hdl::bt_classic::parse_peer_address(&si.addr);
+        #[cfg(not(all(feature = "experimental", target_os = "linux")))]
+        let bluetooth: Option<()> = None;
+        let (socket, upgrade_mediums): (Box<dyn crate::hdl::Duplex>, Vec<Medium>) = match bluetooth {
+            #[cfg(all(feature = "experimental", target_os = "linux"))]
+            Some(address) => (Box::new(crate::hdl::bt_classic::connect(address).await?), vec![]),
+            #[cfg(not(all(feature = "experimental", target_os = "linux")))]
+            Some(()) => unreachable!(),
+            None => (
+                Box::new(tokio::time::timeout(std::time::Duration::from_secs(5), TcpStream::connect(si.addr.clone())).await??),
+                vec![Medium::WifiLan],
+            ),
+        };
         let transfer_id = si.id.clone();
 
         let mut or = OutboundRequest::new(
             endpoint_id,
             socket,
+            upgrade_mediums,
             si.id,
             sender.clone(),
             si.ob,
