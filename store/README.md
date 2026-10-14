@@ -6,7 +6,7 @@ Privacy URL: https://highercomve.github.io/hollershare/privacy/.
 
 ## Build and signing
 
-Run `oriel android init`, then `python3 scripts/configure-android-symbols.py`, then `oriel android build -Dnative_ui -Doptimize=ReleaseSafe -Dplay-store=true`.
+Run `oriel android init`, then `python3 scripts/configure-android-symbols.py`, then `oriel android build -Doptimize=ReleaseSafe -Dplay-store=true`.
 Oriel 0.9.3 generates API 36 and Android Gradle Plugin 8.9.3 projects directly.
 For an older generated project, use `oriel android init --force` after saving your edits.
 CI installs Gradle 8.14.3, Java 21 and Android platform 36.

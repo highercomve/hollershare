@@ -1,0 +1,61 @@
+<style>
+  n1: margin=0,0,18,0 border-color=#b8c7a5 background=#edf0e4
+  n2: color=#292e28
+  summary: color=#292e28
+  n4: color=#71756c
+  n5: color=#292e28
+  folder-line: color=#71756c
+  accept: background=#d95e43 color=#fffaf4 unset="outline"
+  choose-folder: background=#e6ebdf unset="outline"
+  n10: color=#45624b
+  decline: background=#e6ebdf unset="outline"
+  n12: color=#45624b
+  @media (prefers-color-scheme: dark) {
+    n1: border-color=#56704b background=#252c22
+    n2: color=#f1eadf
+    summary: color=#f1eadf
+    n4: color=#aaa194
+    n5: color=#f1eadf
+    folder-line: color=#aaa194
+    accept: background=#f07a5a color=#1c120e
+    choose-folder: background=#2b3327
+    n10: color=#aec79f
+    decline: background=#2b3327
+    n12: color=#aec79f
+  }
+  @when (focus) {
+    accept: outline=3,3,#a5b894
+    choose-folder: outline=3,3,#a5b894
+    decline: outline=3,3,#a5b894
+  }
+  @when (focus) and (prefers-color-scheme: dark) {
+    accept: outline=3,3,#9db58c
+    choose-folder: outline=3,3,#9db58c
+    decline: outline=3,3,#9db58c
+  }
+  @when (hover) {
+    accept: background=#c74f36
+  }
+  @when (hover) and (prefers-color-scheme: dark) {
+    accept: background=#f5937a
+  }
+  @when (last) {
+    n1: margin=0
+  }
+</style>
+<view class="n1" padding="20" border-width="1" radius="10" unset="color font-size">
+  <text class="n2" shrink="0" margin="0,0,7,0" font-size="15" font-weight="600" font-family="DejaVu Sans, sans-serif">{title}</text>
+  <text id="summary" class="summary" shrink="0" margin="0,0,10,0" font-size="14" font-weight="400" font-family="DejaVu Sans, sans-serif">{summary}</text>
+  <text class="n4" shrink="0" margin="0,0,10,0" font-size="10" font-weight="400" font-family="DejaVu Sans, sans-serif" line-height="16">Confirm that this code matches the other device before accepting.</text>
+  <text class="n5" shrink="0" margin="0,0,8,0" font-size="28" font-weight="600" font-family="DejaVu Sans, sans-serif" letter-spacing="6">{pin}</text>
+  <text id="folder-line" class="folder-line" shrink="0" margin="0,0,12,0" font-size="10" font-weight="400" font-family="DejaVu Sans, sans-serif" line-height="16">{folder}</text>
+  <row wrap="wrap" margin="0" row-gap="8" column-gap="8">
+    <text id="accept" class="accept" direction="row" justify="space-between" width="auto" padding="13,16,13,16" radius="7" clickable="true" font-size="13" font-weight="600" font-family="DejaVu Sans, sans-serif" text-align="center">Accept to default</text>
+    <view id="choose-folder" class="choose-folder" justify="center" padding="10,12,10,12" radius="6" clickable="true" unset="shrink">
+      <text class="n10" shrink="0" font-size="11" font-weight="400" font-family="DejaVu Sans, sans-serif" text-align="center" nowrap="true">Choose folder…</text>
+    </view>
+    <view id="decline" class="decline" justify="center" padding="10,12,10,12" radius="6" clickable="true" unset="shrink">
+      <text class="n12" shrink="0" font-size="11" font-weight="400" font-family="DejaVu Sans, sans-serif" text-align="center" nowrap="true">Decline</text>
+    </view>
+  </row>
+</view>

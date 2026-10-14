@@ -19,11 +19,16 @@ manager. Cargo fetches the Rust dependencies using `Cargo.lock`.
 ```sh
 git clone https://github.com/highercomve/hollershare.git
 cd hollershare
-zig build -Doptimize=ReleaseSafe -Dnative_ui
+zig build -Doptimize=ReleaseSafe
 ./zig-out/bin/hollershare
 ```
 
-Native rendering is the default, so `zig build -Doptimize=ReleaseSafe` works too. Cargo builds the protocol core into a static library and Zig links it into the application. The first build needs network access to fetch dependencies. The default build does not require an Oriel CLI or a sibling Oriel checkout.
+`-Drenderer` picks how the window is drawn: `native` (the default) draws
+`frontend/` on native widgets, `webview` shows it in a WebView, and `oriel`
+draws the `.oriel` views in `views/` from Zig (`src/oriel_frontend.zig`, with
+no JavaScript). The views are exported from the page, so the Oriel renderer
+looks the same; after changing the page, export them again with
+`views/export.js` (its header says how). Cargo builds the protocol core into a static library and Zig links it into the application. The first build needs network access to fetch dependencies. The default build does not require an Oriel CLI or a sibling Oriel checkout.
 
 To prefetch a specific Zig package, use `zig fetch '<url>'`. The normal build
 resolves the full dependency graph from `build.zig.zon`; there is no manual

@@ -1,0 +1,49 @@
+<style>
+  n1: border-color="#dedfd3 #292e28 #292e28 #292e28"
+  n4: color=#292e28
+  n5: color=#71756c
+  open: background=#e6ebdf unset="outline"
+  n8: color=#45624b
+  open-folder: unset="outline"
+  n10: color=#71756c
+  saved: color=#71756c
+  n13: color=#45624b
+  @media (prefers-color-scheme: dark) {
+    n1: border-color="#3b342c #f1eadf #f1eadf #f1eadf"
+    n4: color=#f1eadf
+    n5: color=#aaa194
+    open: background=#2b3327
+    n8: color=#aec79f
+    n10: color=#aaa194
+    saved: color=#aaa194
+    n13: color=#aec79f
+  }
+  @when (focus) {
+    open: outline=3,3,#a5b894
+    open-folder: outline=3,3,#a5b894
+  }
+  @when (focus) and (prefers-color-scheme: dark) {
+    open: outline=3,3,#9db58c
+    open-folder: outline=3,3,#9db58c
+  }
+</style>
+<row class="n1" align="center" padding="12,0,12,0" border-width="1,0,0,0" row-gap="12" column-gap="12" unset="color font-size">
+  <view grow="1" shrink="1" basis="0%" min-width="0">
+    <view clip="true">
+      <text class="n4" shrink="0" font-size="12" font-weight="600" font-family="DejaVu Sans, sans-serif" nowrap="true">{name}</text>
+    </view>
+    <text class="n5" shrink="0" margin="0,0,9,0" font-size="10" font-weight="400" font-family="DejaVu Sans, sans-serif" line-height="16">{detail}</text>
+    <row id="actions" wrap="wrap" margin="0" row-gap="8" column-gap="8">
+      <view id="open" class="open" justify="center" padding="10,12,10,12" radius="6" clickable="true" unset="shrink">
+        <text class="n8" shrink="0" font-size="11" font-weight="400" font-family="DejaVu Sans, sans-serif" text-align="center" nowrap="true">{open-label}</text>
+      </view>
+      <view id="open-folder" class="open-folder" justify="center" padding="4" radius="5" clickable="true" unset="shrink">
+        <text class="n10" shrink="0" font-size="11" font-weight="400" font-family="DejaVu Sans, sans-serif" text-align="center">Open folder</text>
+      </view>
+    </row>
+    <text id="saved" class="saved" shrink="0" font-size="10" font-weight="400" font-family="DejaVu Sans, sans-serif" line-height="16">{saved}</text>
+  </view>
+  <view unset="shrink">
+    <text class="n13" shrink="0" font-size="11" font-weight="400" font-family="DejaVu Sans, sans-serif" text-align="right">{status}</text>
+  </view>
+</row>

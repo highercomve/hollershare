@@ -2,6 +2,23 @@
 
 Notable changes in HollerShare releases.
 
+## [Unreleased]
+
+### Added
+
+- `-Drenderer=oriel` draws HollerShare with Oriel's renderer from Zig, with
+  no JavaScript: the `.oriel` views in `views/` are exported from the page
+  (`views/export.js`) and `src/oriel_frontend.zig` is `app.js` in Zig. It
+  looks the same as the native renderer's page, pixel for pixel, in every
+  state compared: light and dark, wide and narrow, settings, the error
+  banner, shared files, devices, requests and transfers (files and text,
+  sent and received), focus and hover.
+
+### Changed
+
+- `-Drenderer=webview|native|oriel` replaces `-Dnative_ui` (native is still
+  the default).
+
 ## [1.0.5] — 2026-10-13
 
 Built on Oriel 0.12.1, which keeps one API per feature: HollerShare's app

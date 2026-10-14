@@ -1,0 +1,23 @@
+<style>
+  n1: border-color="#dedfd3 #292e28 #292e28 #292e28"
+  n4: color=#292e28
+  n5: color=#71756c
+  n7: color=#45624b
+  @media (prefers-color-scheme: dark) {
+    n1: border-color="#3b342c #f1eadf #f1eadf #f1eadf"
+    n4: color=#f1eadf
+    n5: color=#aaa194
+    n7: color=#aec79f
+  }
+</style>
+<row class="n1" align="center" padding="12,0,12,0" border-width="1,0,0,0" row-gap="12" column-gap="12" unset="color font-size">
+  <view grow="1" shrink="1" basis="0%" min-width="0">
+    <view clip="true">
+      <text class="n4" shrink="0" font-size="12" font-weight="600" font-family="DejaVu Sans, sans-serif" nowrap="true">{name}</text>
+    </view>
+    <text class="n5" shrink="0" font-size="10" font-weight="400" font-family="DejaVu Sans, sans-serif" line-height="16">{detail}</text>
+  </view>
+  <view unset="shrink">
+    <text class="n7" shrink="0" font-size="11" font-weight="400" font-family="DejaVu Sans, sans-serif" text-align="right">{status}</text>
+  </view>
+</row>
