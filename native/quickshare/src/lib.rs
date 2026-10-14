@@ -172,6 +172,23 @@ fn terminal(state: Option<&State>) -> bool {
         Some(State::Finished | State::Rejected | State::Cancelled | State::Disconnected)
     )
 }
+/// Where a transfer goes: an IP address and port (Wi-Fi), or a receiver
+/// found over Bluetooth (`bt:AA:BB:CC:DD:EE:FF`).
+fn destination(address: &str) -> Result<String, String> {
+    if let Some(bt) = address.strip_prefix("bt:") {
+        let parts: Vec<&str> = bt.split(':').collect();
+        if parts.len() == 6 && parts.iter().all(|p| p.len() == 2 && p.chars().all(|c| c.is_ascii_hexdigit())) {
+            return Ok(address.to_string());
+        }
+        return Err("Invalid Bluetooth destination".into());
+    }
+    let address: std::net::SocketAddr = address.parse().map_err(|_| "Use an IP address and port".to_string())?;
+    if address.port() == 0 || address.ip().is_unspecified() || address.ip().is_multicast() {
+        return Err("Invalid destination".into());
+    }
+    Ok(address.to_string())
+}
+
 fn validate_paths(paths: &[String]) -> Result<Vec<String>, String> {
     if paths.is_empty() || paths.len() > 1024 {
         return Err("Choose between 1 and 1024 files".into());
@@ -222,12 +239,7 @@ async fn handle(
             name,
             paths,
         } => {
-            let address: std::net::SocketAddr = address
-                .parse()
-                .map_err(|_| "Use an IP address and port".to_string())?;
-            if address.port() == 0 || address.ip().is_unspecified() || address.ip().is_multicast() {
-                return Err("Invalid destination".into());
-            }
+            let address = destination(&address)?;
             let paths = validate_paths(&paths)?;
             let id = format!(
                 "{}-{}",
@@ -250,10 +262,7 @@ async fn handle(
             if text.is_empty() || text.len() > 1024 * 1024 || text.contains('\0') {
                 return Err("Clipboard text must be between 1 byte and 1 MB, without NUL characters".into());
             }
-            let address: std::net::SocketAddr = address.parse().map_err(|_| "Use an IP address and port")?;
-            if address.port() == 0 || address.ip().is_unspecified() || address.ip().is_multicast() {
-                return Err("Invalid destination".into());
-            }
+            let address = destination(&address)?;
             let id = format!("{}-{}", address, std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos());
             sender.try_send(SendInfo { id, name, addr: address.to_string(), ob: OutboundPayload::Text(text) }).map_err(|e| e.to_string())?;
         }

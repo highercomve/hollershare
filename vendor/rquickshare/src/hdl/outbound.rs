@@ -16,7 +16,6 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256, Sha512};
 use tokio::io::AsyncReadExt;
-use tokio::net::TcpStream;
 use tokio::sync::broadcast::{Receiver, Sender};
 use ts_rs::TS;
 
@@ -65,7 +64,10 @@ pub enum OutboundPayload {
 #[derive(Debug)]
 pub struct OutboundRequest {
     endpoint_id: [u8; 4],
-    socket: TcpStream,
+    socket: Box<dyn super::Duplex>,
+    /// The mediums the receiver may upgrade the connection to (none over
+    /// Bluetooth: the transfer stays on it).
+    upgrade_mediums: Vec<Medium>,
     header_bytes: [u8; 4],
     header_length: usize,
     // Last time the peer made progress; drives the idle timeout.
@@ -81,7 +83,8 @@ pub struct OutboundRequest {
 impl OutboundRequest {
     pub fn new(
         endpoint_id: [u8; 4],
-        socket: TcpStream,
+        socket: Box<dyn super::Duplex>,
+        upgrade_mediums: Vec<Medium>,
         id: String,
         sender: Sender<ChannelMessage>,
         payload: OutboundPayload,
@@ -101,6 +104,7 @@ impl OutboundRequest {
         Self {
             endpoint_id,
             socket,
+            upgrade_mediums,
             header_bytes: [0; 4],
             header_length: 0,
             last_activity: tokio::time::Instant::now(),
@@ -279,7 +283,7 @@ impl OutboundRequest {
                         }
                         .serialize(),
                     ),
-                    mediums: vec![Medium::WifiLan.into()],
+                    mediums: self.upgrade_mediums.iter().map(|m| (*m).into()).collect(),
                     ..Default::default()
                 }),
                 ..Default::default()

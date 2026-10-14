@@ -14,7 +14,6 @@ use rand::{Rng, RngCore};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use tokio::io::AsyncReadExt;
-use tokio::net::TcpStream;
 use ts_rs::TS;
 
 use crate::CUSTOM_DOWNLOAD;
@@ -155,7 +154,12 @@ pub fn gen_mdns_endpoint_info(device_type: u8, device_name: &str) -> String {
 }
 
 pub fn parse_mdns_endpoint_info(encoded_str: &str) -> Result<(DeviceType, String), anyhow::Error> {
-    let decoded_bytes = URL_SAFE_NO_PAD.decode(encoded_str)?;
+    parse_endpoint_info(&URL_SAFE_NO_PAD.decode(encoded_str)?)
+}
+
+/// A Quick Share endpoint info: its device type, and its name (a receiver
+/// visible to contacts only has none: "Android device").
+pub fn parse_endpoint_info(decoded_bytes: &[u8]) -> Result<(DeviceType, String), anyhow::Error> {
     if decoded_bytes.len() < 17 {
         return Err(anyhow!("Invalid data length"));
     }
@@ -181,8 +185,8 @@ pub fn parse_mdns_endpoint_info(encoded_str: &str) -> Result<(DeviceType, String
     Ok((DeviceType::from_raw_value(device_type), device_name))
 }
 
-pub async fn stream_read_exact(
-    socket: &mut TcpStream,
+pub async fn stream_read_exact<R: tokio::io::AsyncRead + Unpin + ?Sized>(
+    socket: &mut R,
     buf: &mut [u8],
 ) -> Result<(), anyhow::Error> {
     match tokio::time::timeout(std::time::Duration::from_secs(30), socket.read_exact(buf)).await? {

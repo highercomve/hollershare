@@ -16,6 +16,8 @@ mod ble;
 #[cfg(feature = "experimental")]
 pub use ble::*;
 #[cfg(all(feature = "experimental", target_os = "linux"))]
+pub mod bt_classic;
+#[cfg(all(feature = "experimental", target_os = "linux"))]
 mod blea;
 #[cfg(all(feature = "experimental", target_os = "linux"))]
 pub use blea::*;
@@ -219,8 +221,12 @@ pub(crate) fn next_seq(seq: &mut i32) -> Result<i32, anyhow::Error> {
 }
 
 /// Write a whole buffer to the socket, bounded by WRITE_TIMEOUT.
-pub(crate) async fn write_all_timeout(
-    socket: &mut tokio::net::TcpStream,
+/// A connection to a peer: TCP (Wi-Fi LAN), or RFCOMM (Bluetooth).
+pub trait Duplex: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + Sync + std::fmt::Debug {}
+impl<T: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + Sync + std::fmt::Debug> Duplex for T {}
+
+pub(crate) async fn write_all_timeout<W: tokio::io::AsyncWrite + Unpin + ?Sized>(
+    socket: &mut W,
     data: &[u8],
 ) -> Result<(), anyhow::Error> {
     use tokio::io::AsyncWriteExt;

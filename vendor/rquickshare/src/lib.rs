@@ -190,6 +190,18 @@ impl RQS {
             });
         }
 
+        // Receivers that advertise over Bluetooth only (a Chromebook).
+        #[cfg(all(feature = "experimental", target_os = "linux"))]
+        {
+            let bt = hdl::bt_classic::BtDiscovery::new(sender.clone());
+            let ctk_bt = ctk.clone();
+            tracker.spawn(async move {
+                if let Err(e) = bt.run(ctk_bt).await {
+                    error!("Couldn't run Bluetooth discovery: {}", e);
+                }
+            });
+        }
+
         let discovery = MDnsDiscovery::new(sender)?;
         tracker.spawn(async move { discovery.run(ctk.clone()).await });
 
