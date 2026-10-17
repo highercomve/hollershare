@@ -2,6 +2,15 @@
 
 Notable changes in HollerShare releases.
 
+## [1.1.1] — 2026-10-17
+
+Built on Oriel 0.17.3.
+
+### Fixed
+
+- Android: HollerShare appears in Recents again when opened from the
+  launcher icon (Oriel 0.15.0's launcher activity hid the app's window).
+
 ## [1.1.0] — 2026-10-14
 
 Built on Oriel 0.15.0. HollerShare finds and sends to Chromebooks, which
