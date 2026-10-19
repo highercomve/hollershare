@@ -186,13 +186,22 @@ jobs:
           path: oriel
       - name: Dependencies
         run: |
-          choco install protoc nsis mingw --no-progress -y
+          $protocZip = Join-Path $env:RUNNER_TEMP 'protoc-36.2-win64.zip'
+          Invoke-WebRequest 'https://github.com/protocolbuffers/protobuf/releases/download/v36.2/protoc-36.2-win64.zip' -OutFile $protocZip
+          if ((Get-FileHash $protocZip -Algorithm SHA256).Hash -ne 'f0c128dc0d8492eceece83bb459a4c0e316764b929ffbf1aa416357fd644edd3') { throw 'protoc archive checksum mismatch' }
+          $protocDir = Join-Path $env:RUNNER_TEMP 'protoc'
+          Expand-Archive $protocZip -DestinationPath $protocDir
+          Add-Content $env:GITHUB_PATH (Join-Path $protocDir 'bin')
+          Get-Command gcc -ErrorAction Stop
           rustup target add x86_64-pc-windows-gnu
-          Add-Content $env:GITHUB_PATH 'C:\Program Files (x86)\NSIS'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - run: python scripts/setup-oriel.py
+      - name: Managed NSIS installer
+        run: oriel setup nsis --yes
       - name: Oriel packages
         run: |
           oriel build -Doptimize=ReleaseSafe -Dtarget=x86_64-windows-gnu -Drust-target=x86_64-pc-windows-gnu
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           oriel package -Doptimize=ReleaseSafe -Dtarget=x86_64-windows-gnu -Drust-target=x86_64-pc-windows-gnu
       - name: Sign app and installer
         if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.sign)
