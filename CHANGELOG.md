@@ -2,6 +2,31 @@
 
 Notable changes in HollerShare releases.
 
+## [1.1.2] — 2026-10-19
+
+Built on Oriel 0.18.0.
+
+### Fixed
+
+- Incoming Quick Share connections now accept Android endpoints that omit the
+  public device name, using the same validated parser as discovery. Malformed
+  names and truncated endpoint data are still rejected.
+- Connection diagnostics now include incoming TCP connections and failures
+  before the initial handshake when `RUST_LOG=rqs_lib=debug` is enabled.
+- Release CI reads the Oriel release tag and exact commit from `build.zig.zon`
+  for every platform. CLI setup verifies that checkout before installing the
+  matching released CLI. There is no separate framework version in CI.
+- Updated Oriel to the latest published release, 0.18.0, including its native
+  renderer fixes and the Android launcher fix from 1.1.1.
+
+### Documentation
+
+- Explain native Quick Share failures when discovery works but the firewall
+  blocks receiving. Ports remain random by default; `HOLLERSHARE_PORT` can select
+  a fixed port for a local firewall rule. No firewall rules are changed by the app.
+- Verified native Quick Share text and image transfers from a physical Pixel 8
+  to Linux with the receiving TCP port allowed.
+
 ## [1.1.1] — 2026-10-17
 
 Built on Oriel 0.17.3.

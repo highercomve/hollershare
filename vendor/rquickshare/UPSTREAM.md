@@ -9,7 +9,7 @@ HollerShare modifications:
 - Reject unsafe incoming filenames, negative/oversized sizes and duplicate payload IDs.
 - Create received files exclusively; preserve collisions both on disk and within a batch.
 - Remove incomplete files owned by a failed/cancelled transfer and verify advertised length before completion.
-- Accept nameless 17-byte Android advertisements.
+- Accept nameless 17-byte Android endpoints in discovery and incoming connections, using the same validated parser.
 - Correctly pad variable-width P-256 coordinates and reject invalid public keys.
 - Replace deprecated digest slice access and use constant-time HMAC verification.
 - Send termination frames for empty files; handle source files changing during send; process cancellation between chunks.

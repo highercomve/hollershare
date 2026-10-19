@@ -85,7 +85,7 @@ impl TcpServer {
                 r = self.tcp_listener.accept() => {
                     match r {
                         Ok((socket, remote_addr)) => {
-                            trace!("{INNER_NAME}: new client: {remote_addr}");
+                            debug!("{INNER_NAME}: new client: {remote_addr}");
                             let permit = match self.inbound_slots.clone().try_acquire_owned() {
                                 Ok(p) => p,
                                 Err(_) => {
@@ -115,6 +115,7 @@ impl TcpServer {
                                             Some(AppError::NotAnError) => break,
                                             None => {
                                                 if ir.state.state == State::Initial {
+                                                    debug!("{INNER_NAME}: initial connection from {remote_addr} failed: {e}");
                                                     break;
                                                 }
 

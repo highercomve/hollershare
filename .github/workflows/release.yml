@@ -32,16 +32,27 @@ defaults:
   run:
     working-directory: hollershare
 env:
-  ORIEL_REF: v0.15.0
-  HOLLERSHARE_VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '1.1.1' }}
+  HOLLERSHARE_VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '1.1.2' }}
 jobs:
   framework-ready:
     runs-on: ubuntu-latest
     outputs:
       available: ${{ steps.release.outputs.available }}
+      tag: ${{ steps.framework.outputs.tag }}
+      revision: ${{ steps.framework.outputs.revision }}
     steps:
+      - uses: actions/checkout@v4
+        with:
+          path: hollershare
+      - name: Test dependency pin reader
+        run: python3 -m unittest discover -s tests -p test_oriel_pin.py
+      - name: Read Oriel dependency from build.zig.zon
+        id: framework
+        run: python3 scripts/oriel_pin.py >> "$GITHUB_OUTPUT"
       - name: Wait for the official Oriel release
         id: release
+        env:
+          ORIEL_REF: ${{ steps.framework.outputs.tag }}
         working-directory: ${{ github.workspace }}
         run: |
           if [ "${{ inputs.play_store }}" = "true" ] && [ "${{ inputs.publish }}" = "true" ]; then
@@ -69,7 +80,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: highercomve/Oriel
-          ref: refs/tags/${{ env.ORIEL_REF }}
+          ref: ${{ needs.framework-ready.outputs.revision }}
           path: oriel
       - run: python scripts/setup-oriel.py
       - name: Package tools
@@ -117,7 +128,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: highercomve/Oriel
-          ref: refs/tags/${{ env.ORIEL_REF }}
+          ref: ${{ needs.framework-ready.outputs.revision }}
           path: oriel
       - run: brew install protobuf
       - run: python3 scripts/setup-oriel.py
@@ -171,7 +182,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: highercomve/Oriel
-          ref: refs/tags/${{ env.ORIEL_REF }}
+          ref: ${{ needs.framework-ready.outputs.revision }}
           path: oriel
       - name: Dependencies
         run: |
@@ -211,7 +222,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: highercomve/Oriel
-          ref: refs/tags/${{ env.ORIEL_REF }}
+          ref: ${{ needs.framework-ready.outputs.revision }}
           path: oriel
       - uses: actions/setup-java@v4
         with:
@@ -282,7 +293,7 @@ jobs:
           if-no-files-found: error
   release:
     if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.sign)
-    needs: [linux, macos, windows, android]
+    needs: [framework-ready, linux, macos, windows, android]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -293,7 +304,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: highercomve/Oriel
-          ref: refs/tags/${{ env.ORIEL_REF }}
+          ref: ${{ needs.framework-ready.outputs.revision }}
           path: oriel
       - name: Dependencies
         run: |

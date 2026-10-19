@@ -12,9 +12,11 @@ Download packaged builds from [Releases](https://github.com/highercomve/hollersh
 
 Requirements: Zig 0.16.0, Rust/Cargo and `protoc`. Linux builds also need a C/C++ toolchain, `pkg-config`, GTK4 and D-Bus development libraries.
 
-Oriel 0.15.0 and the Zig libraries are declared in `build.zig.zon`, pinned by commit
+Oriel 0.18.0 and the Zig libraries are declared in `build.zig.zon`, pinned by commit
 and package hash. `zig build` fetches them automatically through Zig's package
-manager. Cargo fetches the Rust dependencies using `Cargo.lock`.
+manager. Cargo fetches the Rust dependencies using `Cargo.lock`. Release CI reads
+the Oriel tag and commit from that same `build.zig.zon` and verifies the checkout
+before installing its matching released CLI.
 
 ```sh
 git clone https://github.com/highercomve/hollershare.git
@@ -97,6 +99,37 @@ CLI commands bind ephemeral ports and run with receiver visibility disabled duri
 Received files go to `Downloads/HollerShare` (or `HollerShare` inside the home directory if no Downloads directory is configured). To use another folder, open Settings (⚙) and pick one with **Choose…**, the system's folder picker; **Use default folder** goes back. Incoming files need approval. Choose **Accept to default** or **Choose folder…** for each request. Completed Activity entries provide **Open file** and **Open folder**, using the actual saved filename. Existing files are preserved using numbered names. Partial files still owned by a failed or cancelled transfer are removed.
 
 Visibility controls whether this computer advertises itself to nearby devices. Hiding does not block an already-known direct address or end an active transfer. The manual address field accepts a Quick Share destination’s IP and port, for example `192.168.1.20:54321`.
+
+## Firewalls and native Quick Share
+
+If Android discovers this computer but sending fails before HollerShare shows
+an approval request, check the firewall on the network interface Android reaches.
+Ethernet and Wi-Fi can belong to different firewall zones, even on the same LAN.
+Allowing mDNS discovery (UDP 5353) does not allow the receiving TCP connection.
+
+By default, HollerShare asks the OS for a random available TCP port at each
+startup. This remains the default on every platform. On a restrictive firewall,
+choose a fixed port with the existing environment variable and allow that port
+on your trusted local network:
+
+```sh
+HOLLERSHARE_PORT=12365 hollershare
+```
+
+For firewalld, first run `firewall-cmd --get-active-zones`. In the following
+example, replace `home` with the zone assigned to your local network interface:
+
+```sh
+sudo firewall-cmd --zone=home --add-port=12365/tcp
+sudo firewall-cmd --permanent --zone=home --add-port=12365/tcp
+```
+
+Keep `HOLLERSHARE_PORT` set for future launches, including the desktop launcher
+(for example, `Exec=env HOLLERSHARE_PORT=12365 /path/to/hollershare`). Reinstalling
+the desktop launcher may replace a local edit. Choose a different allowed port
+if another application uses it. HollerShare does not change firewall rules.
+On Windows and macOS, allow HollerShare through the firewall on your trusted
+local network. Incoming transfers still require approval and matching PINs.
 
 ## Android compatibility
 

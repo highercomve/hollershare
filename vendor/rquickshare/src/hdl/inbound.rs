@@ -37,7 +37,7 @@ use crate::securemessage::{
 use crate::sharing_nearby::{paired_key_result_frame, text_metadata};
 use crate::utils::{
     encode_point, gen_ecdsa_keypair, gen_random, get_download_dir, hkdf_extract_expand,
-    stream_read_exact, to_four_digit_string, DeviceType, RemoteDeviceInfo,
+    stream_read_exact, to_four_digit_string, RemoteDeviceInfo,
 };
 use crate::{location_nearby_connections, sharing_nearby};
 
@@ -182,7 +182,7 @@ impl InboundRequest {
             State::Initial => {
                 debug!("Handling State::Initial frame");
                 let frame = location_nearby_connections::OfflineFrame::decode(&*frame_data)?;
-                let rdi = self.process_connection_request(&frame)?;
+                let rdi = Self::process_connection_request(&frame)?;
                 info!("RemoteDeviceInfo: {:?}", &rdi);
 
                 // Advance current state
@@ -246,7 +246,6 @@ impl InboundRequest {
     }
 
     fn process_connection_request(
-        &self,
         frame: &location_nearby_connections::OfflineFrame,
     ) -> Result<RemoteDeviceInfo, anyhow::Error> {
         let v1_frame = frame
@@ -272,29 +271,13 @@ impl InboundRequest {
             .as_ref()
             .ok_or_else(|| anyhow!("Missing endpoint info"))?;
 
-        // Check if endpoint info length is greater than 17
-        if endpoint_info.len() <= 17 {
-            return Err(anyhow!("Endpoint info too short"));
-        }
-
-        let device_name_length = endpoint_info[17] as usize;
-        // Validate length including device name
-        if endpoint_info.len() < device_name_length + 18 {
-            return Err(anyhow!(
-                "Endpoint info too short to contain the device name"
-            ));
-        }
-
-        // Extract and validate device name based on length
-        let device_name = std::str::from_utf8(&endpoint_info[18..(18 + device_name_length)])
-            .map_err(|_| anyhow!("Device name is not valid UTF-8"))?;
-
-        // Parsing the device type
-        let raw_device_type = (endpoint_info[0] & 7) >> 1_usize;
+        // Use the same format and validation as discovery: Android may omit
+        // its public name, leaving only the 17-byte endpoint header.
+        let (device_type, device_name) = crate::utils::parse_endpoint_info(endpoint_info)?;
 
         Ok(RemoteDeviceInfo {
-            name: device_name.to_string(),
-            device_type: DeviceType::from_raw_value(raw_device_type),
+            name: device_name,
+            device_type,
         })
     }
 
@@ -1462,7 +1445,55 @@ pub(crate) fn is_safe_file_name(name: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::is_safe_file_name;
+    use super::{is_safe_file_name, InboundRequest};
+    use crate::location_nearby_connections::{
+        self as connections, ConnectionRequestFrame, OfflineFrame, V1Frame,
+    };
+    use crate::utils::DeviceType;
+
+    fn connection_request(endpoint_info: Vec<u8>) -> OfflineFrame {
+        OfflineFrame {
+            v1: Some(V1Frame {
+                r#type: Some(connections::v1_frame::FrameType::ConnectionRequest.into()),
+                connection_request: Some(ConnectionRequestFrame {
+                    endpoint_info: Some(endpoint_info),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn incoming_android_endpoint_without_name() {
+        // Contacts-only Android endpoints omit the optional public name.
+        // Bit 4 is part of the endpoint flags, not the device type.
+        let mut endpoint = vec![0; 17];
+        endpoint[0] = (DeviceType::Phone as u8) << 1 | 0x10;
+        let info =
+            InboundRequest::process_connection_request(&connection_request(endpoint)).unwrap();
+        assert_eq!(info.name, "Android device");
+        assert!(matches!(info.device_type, DeviceType::Phone));
+    }
+
+    #[test]
+    fn incoming_endpoint_name_validation() {
+        let mut endpoint = vec![0; 17];
+        endpoint[0] = (DeviceType::Phone as u8) << 1;
+        endpoint.push(7);
+        endpoint.extend_from_slice(b"Pixel 8");
+        let info =
+            InboundRequest::process_connection_request(&connection_request(endpoint.clone())).unwrap();
+        assert_eq!(info.name, "Pixel 8");
+        assert!(matches!(info.device_type, DeviceType::Phone));
+        endpoint.pop();
+        assert!(InboundRequest::process_connection_request(&connection_request(endpoint)).is_err());
+        assert!(InboundRequest::process_connection_request(&connection_request(vec![0; 16])).is_err());
+        let mut invalid_utf8 = vec![0; 17];
+        invalid_utf8.extend_from_slice(&[1, 0xff]);
+        assert!(InboundRequest::process_connection_request(&connection_request(invalid_utf8)).is_err());
+    }
 
     #[test]
     fn file_name_sanitizer() {
