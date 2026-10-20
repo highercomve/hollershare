@@ -10,7 +10,26 @@ import tempfile
 
 sdk = Path(os.environ["ProgramFiles(x86)"]) / "Windows Kits/10/bin"
 signtool = str(sorted(sdk.glob("*/x64/signtool.exe"))[-1])
-makensis = shutil.which("makensis") or str(Path(os.environ["ProgramFiles(x86)"]) / "NSIS/makensis.exe")
+def find_makensis():
+    found = shutil.which("makensis")
+    if found:
+        return found
+    if os.environ.get("ORIEL_MAKENSIS") and Path(os.environ["ORIEL_MAKENSIS"]).is_file():
+        return os.environ["ORIEL_MAKENSIS"]
+    home = Path(os.environ.get("USERPROFILE") or os.environ.get("HOME", ""))
+    oriel_home = Path(os.environ.get("ORIEL_HOME", home / ".oriel"))
+    for pattern in ["nsis/*/makensis.exe", "nsis/*/Bin/makensis.exe", "nsis/makensis.exe", "nsis/Bin/makensis.exe"]:
+        matches = list(oriel_home.glob(pattern))
+        if matches:
+            return str(matches[0])
+    for pf in ["ProgramFiles(x86)", "ProgramFiles"]:
+        if pf in os.environ:
+            candidate = Path(os.environ[pf]) / "NSIS" / "makensis.exe"
+            if candidate.is_file():
+                return str(candidate)
+    return "makensis"
+
+makensis = find_makensis()
 
 candidate_dirs = [
     Path(".zig-cache"),

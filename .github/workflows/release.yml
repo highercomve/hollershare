@@ -202,7 +202,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - run: python scripts/setup-oriel.py
       - name: Managed NSIS installer
-        run: oriel setup nsis --yes
+        run: |
+          oriel setup nsis --yes
+          $makensis = Get-ChildItem -Path (Join-Path $env:USERPROFILE '.oriel\nsis') -Filter makensis.exe -Recurse | Select-Object -First 1
+          if ($makensis) { Add-Content $env:GITHUB_PATH $makensis.DirectoryName }
       - name: Oriel packages
         run: |
           oriel build -Doptimize=ReleaseSafe -Dtarget=x86_64-windows-gnu -Drust-target=x86_64-pc-windows-gnu
