@@ -2,6 +2,33 @@
 
 Notable changes in HollerShare releases.
 
+## [1.1.3] — 2026-10-20
+
+Built on Oriel 0.18.0.
+
+### Fixed
+
+- Native Android Quick Share can send its early acceptance response before the
+  introduction. HollerShare now waits for the introduction instead of closing
+  the connection; local user consent is still required before receiving data.
+- Bound repeated protobuf metadata and certificates before decoding, preventing
+  small network messages from causing excessive memory allocation.
+- Expire pending consent requests after two minutes and limit inbound connections
+  to four per IP, within the existing global limit of sixteen.
+- Keep Bluetooth profile registrations owned by their connection, releasing them
+  on completion, failure, cancellation and timeout.
+- Bound desktop and Android discovery caches to 128 peers and notify consumers
+  when entries are evicted.
+- Redact shared text, credentials, filenames and verification PINs from transfer
+  diagnostics. Add explicit safety contracts for the native FFI functions and
+  track GTK signal handler IDs for reliable cleanup.
+
+### Validation
+
+- Verified native Quick Share text and image sends from a Poco X3 to Linux, and
+  image sends back to the phone, with matching PINs, consent and file checksums.
+- Added regression coverage and strict Rust/C static checks to Linux release CI.
+
 ## [1.1.2] — 2026-10-19
 
 Built on Oriel 0.18.0.

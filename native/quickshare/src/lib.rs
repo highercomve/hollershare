@@ -488,6 +488,10 @@ fn setup_logging() {
 /// The name nearby devices see (the platform's device name, from Oriel),
 /// before `hollershare_start`. Null or empty: the host name. Input must be a
 /// NUL-terminated string owned by the caller (invalid UTF-8 is replaced).
+///
+/// # Safety
+/// A non-null `name` must point to a readable NUL-terminated string that
+/// remains valid and is not mutated for the duration of this call.
 #[no_mangle]
 pub unsafe extern "C" fn hollershare_set_device_name(name: *const c_char) {
     let name = if name.is_null() {
@@ -497,7 +501,12 @@ pub unsafe extern "C" fn hollershare_set_device_name(name: *const c_char) {
     };
     rqs_lib::set_device_name(name);
 }
-/// Input must be a valid NUL-terminated UTF-8 string owned by the caller.
+/// Start the engine using the caller's downloads directory.
+///
+/// # Safety
+/// A non-null `directory` must point to a readable NUL-terminated string
+/// that remains valid and is not mutated for this call. Free the returned
+/// response exactly once with `hollershare_free`.
 #[no_mangle]
 pub unsafe extern "C" fn hollershare_start(directory: *const c_char) -> *mut c_char {
     guarded(|| {
@@ -552,6 +561,12 @@ pub unsafe extern "C" fn hollershare_start(directory: *const c_char) -> *mut c_c
         }
     })
 }
+/// Submit a JSON command to the running engine.
+///
+/// # Safety
+/// A non-null `request` must point to a readable NUL-terminated string that
+/// remains valid and is not mutated for this call. Free the returned
+/// response exactly once with `hollershare_free`.
 #[no_mangle]
 pub unsafe extern "C" fn hollershare_request(request: *const c_char) -> *mut c_char {
     guarded(|| {
@@ -651,7 +666,12 @@ pub extern "C" fn hollershare_stop() {
         }
     }
 }
-/// Free exactly once a non-null pointer returned by start/request.
+/// Release a response allocated by this library; null is accepted.
+///
+/// # Safety
+/// A non-null `pointer` must be an unmodified pointer returned by
+/// `hollershare_start` or `hollershare_request`, still owned by the caller
+/// and never previously freed. No other thread may access it while freed.
 #[no_mangle]
 pub unsafe extern "C" fn hollershare_free(pointer: *mut c_char) {
     if !pointer.is_null() {

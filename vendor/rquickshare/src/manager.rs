@@ -1,11 +1,13 @@
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::net::IpAddr;
+use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::broadcast::Sender;
 use tokio::sync::mpsc::Receiver;
-use tokio::sync::Semaphore;
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 use ts_rs::TS;
@@ -18,6 +20,40 @@ use crate::utils::RemoteDeviceInfo;
 const INNER_NAME: &str = "TcpServer";
 /// Most inbound connections handled at once; extra sockets are dropped.
 const MAX_INBOUND_CONNECTIONS: usize = 16;
+const MAX_INBOUND_PER_PEER: usize = 4;
+
+struct InboundLimits {
+    slots: Arc<Semaphore>,
+    peers: HashMap<IpAddr, Weak<Semaphore>>,
+}
+
+impl InboundLimits {
+    fn new() -> Self {
+        Self {
+            slots: Arc::new(Semaphore::new(MAX_INBOUND_CONNECTIONS)),
+            peers: HashMap::new(),
+        }
+    }
+
+    fn acquire(&mut self, address: IpAddr) -> Option<(OwnedSemaphorePermit, OwnedSemaphorePermit)> {
+        let global = self.slots.clone().try_acquire_owned().ok()?;
+        // Only active connections retain these semaphores; stale IPs never
+        // accumulate. The global permit bounds this map to 16 entries too.
+        self.peers.retain(|_, peer| peer.strong_count() > 0);
+        let peer = self
+            .peers
+            .get(&address)
+            .and_then(Weak::upgrade)
+            .unwrap_or_else(|| {
+                let slots = Arc::new(Semaphore::new(MAX_INBOUND_PER_PEER));
+                self.peers.insert(address, Arc::downgrade(&slots));
+                slots
+            });
+        let per_peer = peer.try_acquire_owned().ok()?;
+        Some((global, per_peer))
+    }
+}
+
 /// Back-off after a failed accept() (e.g. EMFILE) so the loop doesn't spin.
 const ACCEPT_ERROR_BACKOFF: Duration = Duration::from_millis(100);
 
@@ -36,7 +72,7 @@ pub struct TcpServer {
     sender: Sender<ChannelMessage>,
     connect_receiver: Receiver<SendInfo>,
     tracker: TaskTracker,
-    inbound_slots: Arc<Semaphore>,
+    inbound_limits: InboundLimits,
 }
 
 impl TcpServer {
@@ -53,7 +89,7 @@ impl TcpServer {
             sender,
             connect_receiver,
             tracker,
-            inbound_slots: Arc::new(Semaphore::new(MAX_INBOUND_CONNECTIONS)),
+            inbound_limits: InboundLimits::new(),
         })
     }
 
@@ -69,7 +105,7 @@ impl TcpServer {
                     break;
                 }
                 Some(i) = self.connect_receiver.recv() => {
-                    info!("{INNER_NAME}: connect_receiver: got {:?}", i);
+                    info!("{INNER_NAME}: starting outbound transfer: {:?}", i.ob);
                     let endpoint_id = self.endpoint_id;
                     let sender = self.sender.clone();
                     self.tracker.spawn(async move {
@@ -86,10 +122,10 @@ impl TcpServer {
                     match r {
                         Ok((socket, remote_addr)) => {
                             debug!("{INNER_NAME}: new client: {remote_addr}");
-                            let permit = match self.inbound_slots.clone().try_acquire_owned() {
-                                Ok(p) => p,
-                                Err(_) => {
-                                    warn!("{INNER_NAME}: too many inbound connections, dropping {remote_addr}");
+                            let permit = match self.inbound_limits.acquire(remote_addr.ip()) {
+                                Some(p) => p,
+                                None => {
+                                    warn!("{INNER_NAME}: inbound connection limit reached, dropping {remote_addr}");
                                     drop(socket);
                                     continue;
                                 }
@@ -164,7 +200,13 @@ impl TcpServer {
         let bluetooth: Option<()> = None;
         let (socket, upgrade_mediums): (Box<dyn crate::hdl::Duplex>, Vec<Medium>) = match bluetooth {
             #[cfg(all(feature = "experimental", target_os = "linux"))]
-            Some(address) => (Box::new(crate::hdl::bt_classic::connect(address).await?), vec![]),
+            Some(address) => {
+                let connection = tokio::select! {
+                    _ = ctk.cancelled() => return Err(anyhow::anyhow!("Transfer cancelled")),
+                    result = crate::hdl::bt_classic::connect(address) => result?,
+                };
+                (Box::new(connection), vec![])
+            },
             #[cfg(not(all(feature = "experimental", target_os = "linux")))]
             Some(()) => unreachable!(),
             None => (
@@ -225,5 +267,49 @@ impl TcpServer {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod admission_tests {
+    use super::*;
+
+    #[test]
+    fn peer_limits_release_without_leaking_global_slots_or_peer_entries() {
+        let mut limits = InboundLimits::new();
+        let ip: IpAddr = "192.0.2.1".parse().unwrap();
+        let mut permits = Vec::new();
+        for _ in 0..MAX_INBOUND_PER_PEER {
+            permits.push(limits.acquire(ip).unwrap());
+        }
+        assert!(limits.acquire(ip).is_none());
+        assert_eq!(
+            limits.slots.available_permits(),
+            MAX_INBOUND_CONNECTIONS - MAX_INBOUND_PER_PEER
+        );
+        let other = limits.acquire("192.0.2.2".parse().unwrap()).unwrap();
+        drop(permits);
+        drop(other);
+        for n in 1..=1000 {
+            let address = IpAddr::V4(std::net::Ipv4Addr::from(n));
+            drop(limits.acquire(address).unwrap());
+            assert!(limits.peers.len() <= 1);
+        }
+        assert_eq!(limits.slots.available_permits(), MAX_INBOUND_CONNECTIONS);
+    }
+
+    #[test]
+    fn global_limit_still_bounds_distinct_peers() {
+        let mut limits = InboundLimits::new();
+        let permits: Vec<_> = (1..=MAX_INBOUND_CONNECTIONS)
+            .map(|n| {
+                limits
+                    .acquire(IpAddr::V4(std::net::Ipv4Addr::from(n as u32)))
+                    .unwrap()
+            })
+            .collect();
+        assert!(limits.acquire("192.0.2.200".parse().unwrap()).is_none());
+        drop(permits);
+        assert!(limits.acquire("192.0.2.200".parse().unwrap()).is_some());
     }
 }

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::time::Duration;
 
 #[cfg(not(target_os = "android"))]
@@ -23,6 +23,36 @@ pub struct EndpointInfo {
     pub port: Option<String>,
     pub rtype: Option<DeviceType>,
     pub present: Option<bool>,
+}
+
+// Matches the application peer cap. Keeping this bound in discovery also
+// protects callers that do not use HollerShare's model. Iterations are at
+// most MAX_DISCOVERED_PEERS; least recently resolved entries leave first.
+const MAX_DISCOVERED_PEERS: usize = 128;
+#[derive(Default)]
+struct DiscoveryCache {
+    entries: VecDeque<EndpointInfo>,
+}
+
+impl DiscoveryCache {
+    fn insert(&mut self, endpoint: EndpointInfo) -> Option<EndpointInfo> {
+        let previous = self.remove(&endpoint.fullname);
+        let evicted = if self.entries.len() == MAX_DISCOVERED_PEERS {
+            self.entries.pop_front()
+        } else {
+            previous.filter(|old| old.id != endpoint.id)
+        };
+        self.entries.push_back(endpoint);
+        evicted
+    }
+
+    fn remove(&mut self, fullname: &str) -> Option<EndpointInfo> {
+        let index = self
+            .entries
+            .iter()
+            .position(|entry| entry.fullname == fullname)?;
+        self.entries.remove(index)
+    }
 }
 
 pub struct MDnsDiscovery {
@@ -136,6 +166,23 @@ mod android_nsd {
 }
 
 impl MDnsDiscovery {
+    fn publish_endpoint(
+        sender: &broadcast::Sender<EndpointInfo>,
+        cache: &mut DiscoveryCache,
+        endpoint: EndpointInfo,
+    ) {
+        if let Some(evicted) = cache.insert(endpoint.clone()) {
+            // Eviction is also a removal for consumers; otherwise their own
+            // caches could accumulate entries despite the discovery bound.
+            let _ = sender.send(EndpointInfo {
+                id: evicted.id,
+                present: Some(false),
+                ..Default::default()
+            });
+        }
+        let _ = sender.send(endpoint);
+    }
+
     #[cfg(not(target_os = "android"))]
     pub fn new(sender: broadcast::Sender<EndpointInfo>) -> Result<Self, anyhow::Error> {
         let daemon = ServiceDaemon::new()?;
@@ -183,7 +230,7 @@ impl MDnsDiscovery {
 
         info!("MDnsDiscovery: Android NsdManager discovery started (handle {handle})");
 
-        let mut cache: HashMap<String, EndpointInfo> = HashMap::new();
+        let mut cache = DiscoveryCache::default();
 
         loop {
             tokio::select! {
@@ -240,8 +287,7 @@ impl MDnsDiscovery {
                                     present: Some(true),
                                 };
                                 info!("ServiceResolved (Android NSD): Found device {name}: {:?}", ei);
-                                cache.insert(name.clone(), ei.clone());
-                                let _ = self.sender.send(ei);
+                                Self::publish_endpoint(&self.sender, &mut cache, ei);
                             } else {
                                 debug!("ServiceResolved (Android NSD): Could not connect to any address for {name} ({addresses:?}:{port})");
                             }
@@ -251,6 +297,7 @@ impl MDnsDiscovery {
                                 info!("ServiceRemoved (Android NSD): Lost device {name}");
                                 let _ = self.sender.send(EndpointInfo {
                                     id: ei.id,
+                                    present: Some(false),
                                     ..Default::default()
                                 });
                             }
@@ -278,7 +325,7 @@ impl MDnsDiscovery {
         let receiver = daemon.browse(service_type)?;
 
         // Map with fullname as key and EndpointInfo as value
-        let mut cache: HashMap<String, EndpointInfo> = HashMap::new();
+        let mut cache = DiscoveryCache::default();
 
         loop {
             tokio::select! {
@@ -342,22 +389,17 @@ impl MDnsDiscovery {
                                             present: Some(true),
                                         };
                                         info!("ServiceResolved: Resolved a new service: {:?}", ei);
-                                        cache.insert(fullname.clone(), ei.clone());
-                                        let _ = self.sender.send(ei);
+                                        Self::publish_endpoint(&self.sender, &mut cache, ei);
                                     } else {
                                         debug!("ServiceResolved: Could not connect to any address for {fullname}");
                                     }
                                 }
                                 ServiceEvent::ServiceRemoved(_, fullname) => {
                                     trace!("ServiceRemoved: checking if should remove {}", fullname);
-                                    // Only remove if it has not been seen in the last cleanup_threshold
-                                    let should_remove = cache.get(&fullname).map(|ei| ei.id.clone());
-
-                                    if let Some(id) = should_remove {
-                                        info!("ServiceRemoved: Remove a previous service: {}", fullname);
-                                        cache.remove(&fullname);
+                                    if let Some(endpoint) = cache.remove(&fullname) {
                                         let _ = self.sender.send(EndpointInfo {
-                                            id,
+                                            id: endpoint.id,
+                                            present: Some(false),
                                             ..Default::default()
                                         });
                                     }
@@ -398,5 +440,65 @@ mod connection_tests {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let stream = TcpStream::connect(listener.local_addr().unwrap()).await.unwrap();
         assert!(!connection_is_remote(&stream));
+    }
+}
+
+#[cfg(test)]
+mod cache_tests {
+    use super::*;
+
+    fn endpoint(number: usize) -> EndpointInfo {
+        EndpointInfo {
+            fullname: format!("peer-{number}"),
+            id: number.to_string(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn discovery_flood_is_bounded_and_evicts_oldest() {
+        let mut cache = DiscoveryCache::default();
+        for n in 0..MAX_DISCOVERED_PEERS * 4 {
+            let evicted = cache.insert(endpoint(n));
+            if n >= MAX_DISCOVERED_PEERS {
+                assert_eq!(evicted.unwrap().id, (n - MAX_DISCOVERED_PEERS).to_string());
+            }
+            assert!(cache.entries.len() <= MAX_DISCOVERED_PEERS);
+        }
+    }
+
+    #[test]
+    fn refresh_and_removal_do_not_evict_other_peers() {
+        let mut cache = DiscoveryCache::default();
+        for n in 0..MAX_DISCOVERED_PEERS {
+            cache.insert(endpoint(n));
+        }
+        assert!(cache.insert(endpoint(0)).is_none());
+        assert_eq!(
+            cache.insert(endpoint(MAX_DISCOVERED_PEERS)).unwrap().id,
+            "1"
+        );
+        assert!(cache.remove("peer-0").is_some());
+        assert!(cache.remove("peer-0").is_none());
+        let mut changed = endpoint(2);
+        changed.id = "new address".into();
+        assert_eq!(cache.insert(changed).unwrap().id, "2");
+    }
+
+    #[test]
+    fn eviction_is_published_to_consumers() {
+        let (sender, mut receiver) = broadcast::channel(4);
+        let mut cache = DiscoveryCache::default();
+        for n in 0..MAX_DISCOVERED_PEERS {
+            cache.insert(endpoint(n));
+        }
+        MDnsDiscovery::publish_endpoint(&sender, &mut cache, endpoint(MAX_DISCOVERED_PEERS));
+        let removed = receiver.try_recv().unwrap();
+        assert_eq!(removed.id, "0");
+        assert_eq!(removed.present, Some(false));
+        assert_eq!(
+            receiver.try_recv().unwrap().id,
+            MAX_DISCOVERED_PEERS.to_string()
+        );
     }
 }

@@ -32,7 +32,7 @@ defaults:
   run:
     working-directory: hollershare
 env:
-  HOLLERSHARE_VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '1.1.2' }}
+  HOLLERSHARE_VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '1.1.3' }}
 jobs:
   framework-ready:
     runs-on: ubuntu-latest
@@ -73,7 +73,7 @@ jobs:
     steps:
       - name: System dependencies
         working-directory: ${{ github.workspace }}
-        run: pacman -Syu --noconfirm --needed git openssh ca-certificates curl pkgconf gtk4 webkitgtk-6.0 wayland wayland-protocols libxkbcommon libxtst libx11 dbus ttf-dejavu python python-gobject python-pillow nodejs rust protobuf base-devel go squashfs-tools xorg-server-xvfb xdotool xsel imagemagick
+        run: pacman -Syu --noconfirm --needed git openssh ca-certificates curl pkgconf gtk4 webkitgtk-6.0 wayland wayland-protocols libxkbcommon libxtst libx11 dbus ttf-dejavu python python-gobject python-pillow nodejs rust clippy clang protobuf base-devel go squashfs-tools xorg-server-xvfb xdotool xsel imagemagick
       - uses: actions/checkout@v4
         with:
           path: hollershare
@@ -89,6 +89,11 @@ jobs:
         run: node --test tests/frontend-drop.test.mjs
       - name: Rust and protocol tests
         run: cargo test --locked -p hollershare-quickshare -p rqs_lib
+      - name: Protocol and native static analysis
+        run: |
+          cargo clippy --locked -p hollershare-quickshare -p rqs_lib --all-targets -- -D warnings
+          clang -fsyntax-only -Wall -Wextra -Wpedantic -Werror $(pkg-config --cflags gtk4 gio-2.0) src/desktop_linux.c
+          clang --analyze -Wall -Wextra -Wpedantic -Werror $(pkg-config --cflags gtk4 gio-2.0) src/desktop_linux.c -o /tmp/hollershare-desktop-analysis.plist
       - name: Oriel packages (native UI)
         run: |
           oriel build -Doptimize=ReleaseSafe -Dcpu=baseline

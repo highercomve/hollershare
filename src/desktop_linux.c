@@ -9,6 +9,11 @@ extern void hollershare_quit_requested(void);
 static GtkApplication *application;
 static GtkWindow *parent;
 static GSettings *appearance;
+/* GTK signals require function pointers. Keep their handler IDs so cleanup
+ * uses the typed signal API without converting function pointers to void*. */
+static GtkSettings *theme_settings;
+static gulong gtk_dark_handler;
+static gulong gtk_theme_handler;
 static GDBusConnection *bus;
 static guint portal_subscription;
 static int portal_scheme = -1;
@@ -78,8 +83,9 @@ void hollershare_desktop_init(void *window) {
     }
     GtkSettings *settings = gtk_settings_get_default();
     if (settings) {
-        g_signal_connect(settings, "notify::gtk-application-prefer-dark-theme", G_CALLBACK(gtk_changed), NULL);
-        g_signal_connect(settings, "notify::gtk-theme-name", G_CALLBACK(gtk_changed), NULL);
+        theme_settings = g_object_ref(settings);
+        gtk_dark_handler = g_signal_connect(settings, "notify::gtk-application-prefer-dark-theme", G_CALLBACK(gtk_changed), NULL);
+        gtk_theme_handler = g_signal_connect(settings, "notify::gtk-theme-name", G_CALLBACK(gtk_changed), NULL);
     }
     bus = g_bus_get_sync(G_BUS_TYPE_SESSION, NULL, NULL);
     if (bus) {
@@ -108,8 +114,10 @@ void hollershare_desktop_init(void *window) {
 void hollershare_desktop_cleanup(void) {
     if (bus && portal_subscription) g_dbus_connection_signal_unsubscribe(bus, portal_subscription);
     g_clear_object(&bus); g_clear_object(&appearance);
-    GtkSettings *settings = gtk_settings_get_default();
-    if (settings) g_signal_handlers_disconnect_by_func(settings, G_CALLBACK(gtk_changed), NULL);
+    if (theme_settings && gtk_dark_handler) g_signal_handler_disconnect(theme_settings, gtk_dark_handler);
+    if (theme_settings && gtk_theme_handler) g_signal_handler_disconnect(theme_settings, gtk_theme_handler);
+    gtk_dark_handler = 0; gtk_theme_handler = 0;
+    g_clear_object(&theme_settings);
     if (application) {
         g_action_map_remove_action(G_ACTION_MAP(application), "review-transfer");
         g_action_map_remove_action(G_ACTION_MAP(application), "transfer-action");

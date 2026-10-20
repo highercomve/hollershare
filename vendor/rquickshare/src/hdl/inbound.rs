@@ -44,6 +44,7 @@ use crate::{location_nearby_connections, sharing_nearby};
 type HmacSha256 = Hmac<Sha256>;
 
 const SANITY_DURATION: Duration = Duration::from_micros(10);
+const CONSENT_TIMEOUT: Duration = Duration::from_secs(120);
 
 #[derive(Debug)]
 pub struct InboundRequest {
@@ -52,6 +53,7 @@ pub struct InboundRequest {
     header_length: usize,
     // Last time the peer made progress; drives the idle timeout.
     last_activity: tokio::time::Instant,
+    consent_deadline: Option<tokio::time::Instant>,
     pub state: InnerState,
     sender: Sender<ChannelMessage>,
     receiver: Receiver<ChannelMessage>,
@@ -66,6 +68,7 @@ impl InboundRequest {
             header_bytes: [0; 4],
             header_length: 0,
             last_activity: tokio::time::Instant::now(),
+            consent_deadline: None,
             state: InnerState {
                 id,
                 server_seq: 0,
@@ -85,16 +88,20 @@ impl InboundRequest {
         // Buffer for the 4-byte length
         let mut length_buf = [0u8; 4];
 
-        // No idle timeout while the local user is deciding.
-        let waiting_for_user = self.state.state == State::WaitingForUserConsent;
-        if waiting_for_user {
-            self.last_activity = tokio::time::Instant::now();
+        let deadline = if self.state.state == State::WaitingForUserConsent {
+            self.consent_deadline.ok_or_else(|| anyhow!("Missing consent deadline"))?
+        } else {
+            self.last_activity + IDLE_TIMEOUT
+        };
+        // Check before select as well: continuously ready peer/control traffic
+        // must not starve the absolute consent deadline.
+        if tokio::time::Instant::now() >= deadline {
+            return Err(anyhow!("Peer idle or user consent deadline expired"));
         }
-        let idle_deadline = self.last_activity + IDLE_TIMEOUT;
 
         tokio::select! {
-            _ = tokio::time::sleep_until(idle_deadline), if !waiting_for_user => {
-                return Err(anyhow!("Peer idle for more than {}s", IDLE_TIMEOUT.as_secs()));
+            _ = tokio::time::sleep_until(deadline) => {
+                return Err(anyhow!("Peer idle or user consent deadline expired"));
             }
             i = self.receiver.recv() => {
                 match i {
@@ -511,216 +518,187 @@ impl InboundRequest {
         }
 
         let offline = location_nearby_connections::OfflineFrame::decode(d2d_msg.message())?;
-        let v1_frame = offline
+        self.process_secure_offline_frame(&offline).await
+    }
+
+    async fn process_secure_offline_frame(
+        &mut self,
+        offline: &OfflineFrame,
+    ) -> Result<(), anyhow::Error> {
+        let v1 = offline
             .v1
             .as_ref()
-            .ok_or_else(|| anyhow!("Missing required fields"))?;
-        match v1_frame.r#type() {
+            .ok_or_else(|| anyhow!("Missing frame"))?;
+        match v1.r#type() {
             location_nearby_connections::v1_frame::FrameType::PayloadTransfer => {
-                trace!("Received FrameType::PayloadTransfer");
-                let payload_transfer = v1_frame
+                let transfer = v1
                     .payload_transfer
                     .as_ref()
-                    .ok_or_else(|| anyhow!("Missing required fields"))?;
-
-                let header = payload_transfer
+                    .ok_or_else(|| anyhow!("Missing payload"))?;
+                let header = transfer
                     .payload_header
                     .as_ref()
-                    .ok_or_else(|| anyhow!("Missing required fields"))?;
-                let chunk = payload_transfer
+                    .ok_or_else(|| anyhow!("Missing payload header"))?;
+                let chunk = transfer
                     .payload_chunk
                     .as_ref()
-                    .ok_or_else(|| anyhow!("Missing required fields"))?;
-
+                    .ok_or_else(|| anyhow!("Missing payload chunk"))?;
                 match header.r#type() {
                     payload_header::PayloadType::Bytes => {
-                        info!("Processing PayloadType::Bytes");
-                        let payload_id = header.id();
-
-                        append_bytes_chunk(
-                            &mut self.state.payload_buffers,
-                            payload_id,
-                            header.total_size(),
-                            chunk.offset(),
-                            chunk.body.as_deref(),
-                        )?;
-
-                        if (chunk.flags() & 1) == 1 {
-                            debug!("Chunk flags & 1 == 1 ?? End of data ??");
-                            // Final chunk: take ownership so the entry is pruned.
-                            let buffer = self
-                                .state
-                                .payload_buffers
-                                .remove(&payload_id)
-                                .unwrap_or_default();
-
-                            if self.state.text_payload.is_some()
-                                && self.state.text_payload.as_ref().unwrap().get_i64_value()
-                                    == payload_id
-                            {
-                                if self.state.state != State::ReceivingFiles {
-                                    return Err(anyhow!("Text received before approval"));
-                                }
-                                if buffer.len() as i64 != header.total_size() {
-                                    return Err(anyhow!("Incomplete text payload"));
-                                }
-                                info!("Transfer finished");
-                                let end_index = if matches!(self.state.text_payload, Some(TextPayloadInfo::Wifi(_))) {
-                                    buffer.iter().position(|&b| b == 16).unwrap_or(buffer.len())
-                                } else { buffer.len() };
-                                let payload = std::str::from_utf8(&buffer[..end_index])?.to_owned();
-
-                                match self.state.text_payload.clone().unwrap() {
-                                    TextPayloadInfo::Url(_) => {
-                                        self.update_state(
-                                            |e| {
-                                                if let Some(tmd) = e.transfer_metadata.as_mut() {
-                                                    tmd.text_payload = Some(payload);
-                                                    tmd.text_type = Some(TextPayloadType::Url);
-                                                }
-                                            },
-                                            false,
-                                        )
-                                        .await;
-                                    }
-                                    TextPayloadInfo::Text(_) => {
-                                        self.update_state(
-                                            |e| {
-                                                if let Some(tmd) = e.transfer_metadata.as_mut() {
-                                                    tmd.text_payload = Some(payload);
-                                                    tmd.text_type = Some(TextPayloadType::Text);
-                                                }
-                                            },
-                                            false,
-                                        )
-                                        .await;
-                                    }
-                                    TextPayloadInfo::Wifi((_, ssid)) => {
-                                        self.update_state(
-                                            |e| {
-                                                if let Some(tmd) = e.transfer_metadata.as_mut() {
-                                                    tmd.text_payload =
-                                                        Some(format!("{ssid}: {}", payload.trim()));
-                                                    tmd.text_type = Some(TextPayloadType::Wifi);
-                                                }
-                                            },
-                                            false,
-                                        )
-                                        .await;
-                                    }
-                                }
-
-                                self.update_state(
-                                    |e| {
-                                        e.state = State::Finished;
-                                        if let Some(meta) = e.transfer_metadata.as_mut() { meta.ack_bytes = meta.total_bytes; }
-                                    },
-                                    true,
-                                )
-                                .await;
-                                self.disconnection().await?;
-                                return Err(anyhow!(crate::errors::AppError::NotAnError));
-                            } else {
-                                let innner_frame =
-                                    sharing_nearby::Frame::decode(buffer.as_slice())?;
-                                self.process_transfer_setup(&innner_frame).await?;
-                            }
-                        }
+                        self.process_bytes_payload(header, chunk).await?
                     }
                     payload_header::PayloadType::File => {
-                        info!("Processing PayloadType::File");
-                        let payload_id = header.id();
-                        if self.state.state != State::ReceivingFiles {
-                            return Err(anyhow!("File data received before approval"));
-                        }
-
-                        let file_internal = self
-                            .state
-                            .transferred_files
-                            .get_mut(&payload_id)
-                            .ok_or_else(|| {
-                                anyhow!("File payload ID ({}) is not known", payload_id)
-                            })?;
-
-                        let current_offset = file_internal.bytes_transferred;
-                        if chunk.offset() != current_offset {
-                            return Err(anyhow!(
-                                "Invalid offset into file {}, expected {}",
-                                chunk.offset(),
-                                current_offset
-                            ));
-                        }
-
-                        let chunk_size = chunk.body().len();
-                        if current_offset + chunk_size as i64 > file_internal.total_size {
-                            return Err(anyhow!(
-                                "Transferred file size exceeds previously specified value: {} vs {}", current_offset + chunk_size as i64, file_internal.total_size
-                            ));
-                        }
-
-                        if !chunk.body().is_empty() {
-                            let file = file_internal
-                                .file
-                                .as_mut()
-                                .ok_or_else(|| anyhow!("File not accepted"))?;
-                            file.seek(SeekFrom::Start(current_offset as u64))?;
-                            file.write_all(chunk.body())?;
-                            file_internal.bytes_transferred += chunk_size as i64;
-
-                            self.update_state(
-                                |e| {
-                                    if let Some(tmd) = e.transfer_metadata.as_mut() {
-                                        tmd.ack_bytes += chunk_size as u64;
-                                    }
-                                },
-                                true,
-                            )
-                            .await;
-                        } else if (chunk.flags() & 1) == 1 {
-                            if file_internal.bytes_transferred != file_internal.total_size {
-                                return Err(anyhow!("Incomplete file payload"));
-                            }
-                            file_internal
-                                .file
-                                .as_ref()
-                                .ok_or_else(|| anyhow!("File not accepted"))?
-                                .sync_all()?;
-                            self.state.transferred_files.remove(&payload_id);
-                            if self.state.transferred_files.is_empty() {
-                                info!("Transfer finished");
-                                self.update_state(
-                                    |e| {
-                                        e.state = State::Finished;
-                                    },
-                                    true,
-                                )
-                                .await;
-                                self.disconnection().await?;
-                                return Err(anyhow!(crate::errors::AppError::NotAnError));
-                            }
-                        }
+                        self.process_file_payload(header, chunk).await?
                     }
-                    payload_header::PayloadType::Stream => {
-                        error!("Unhandled PayloadType::Stream: {:?}", header.r#type())
-                    }
-                    payload_header::PayloadType::UnknownPayloadType => {
-                        error!(
-                            "Invalid PayloadType::UnknownPayloadType: {:?}",
-                            header.r#type()
-                        )
-                    }
+                    _ => return Err(anyhow!("Unsupported payload type")),
                 }
             }
             location_nearby_connections::v1_frame::FrameType::KeepAlive => {
-                trace!("Sending keepalive");
-                self.send_keepalive(true).await?;
+                self.send_keepalive(true).await?
             }
-            _ => {
-                error!("Unhandled offline frame encrypted: {:?}", offline);
-            }
+            _ => error!("Unhandled encrypted frame type: {:?}", v1.r#type()),
         }
-
         Ok(())
+    }
+
+    async fn process_bytes_payload(
+        &mut self,
+        header: &PayloadHeader,
+        chunk: &PayloadChunk,
+    ) -> Result<(), anyhow::Error> {
+        let text = self
+            .state
+            .text_payload
+            .as_ref()
+            .filter(|text| text.get_i64_value() == header.id())
+            .cloned();
+        if text.is_some() && self.state.state != State::ReceivingFiles {
+            return Err(anyhow!("Text received before approval"));
+        }
+        append_bytes_chunk(
+            &mut self.state.payload_buffers,
+            header.id(),
+            header.total_size(),
+            chunk.offset(),
+            chunk.body.as_deref(),
+        )?;
+        if chunk.flags() & 1 == 0 {
+            return Ok(());
+        }
+        let buffer = self
+            .state
+            .payload_buffers
+            .remove(&header.id())
+            .unwrap_or_default();
+        if buffer.len() as i64 != header.total_size() {
+            return Err(anyhow!("Incomplete byte payload"));
+        }
+        if let Some(text) = text {
+            self.finish_text_payload(text, &buffer).await
+        } else {
+            let frame = super::sharing_frame::decode_sharing_frame(&buffer)?;
+            self.process_transfer_setup(&frame).await
+        }
+    }
+
+    async fn finish_text_payload(
+        &mut self,
+        text: TextPayloadInfo,
+        buffer: &[u8],
+    ) -> Result<(), anyhow::Error> {
+        let end = if matches!(text, TextPayloadInfo::Wifi(_)) {
+            buffer
+                .iter()
+                .position(|&byte| byte == 16)
+                .unwrap_or(buffer.len())
+        } else {
+            buffer.len()
+        };
+        let payload = std::str::from_utf8(&buffer[..end])?.to_owned();
+        let (kind, payload) = match text {
+            TextPayloadInfo::Url(_) => (TextPayloadType::Url, payload),
+            TextPayloadInfo::Text(_) => (TextPayloadType::Text, payload),
+            TextPayloadInfo::Wifi((_, ssid)) => {
+                (TextPayloadType::Wifi, format!("{ssid}: {}", payload.trim()))
+            }
+        };
+        self.update_state(
+            |state| {
+                state.state = State::Finished;
+                if let Some(meta) = state.transfer_metadata.as_mut() {
+                    meta.text_payload = Some(payload);
+                    meta.text_type = Some(kind);
+                    meta.ack_bytes = meta.total_bytes;
+                }
+            },
+            true,
+        )
+        .await;
+        self.disconnection().await?;
+        Err(anyhow!(crate::errors::AppError::NotAnError))
+    }
+
+    async fn process_file_payload(
+        &mut self,
+        header: &PayloadHeader,
+        chunk: &PayloadChunk,
+    ) -> Result<(), anyhow::Error> {
+        if self.state.state != State::ReceivingFiles {
+            return Err(anyhow!("File data received before approval"));
+        }
+        let finished = self.write_file_chunk(header.id(), chunk)?;
+        self.update_state(
+            |state| {
+                if let Some(meta) = state.transfer_metadata.as_mut() {
+                    meta.ack_bytes += chunk.body().len() as u64;
+                }
+                if finished {
+                    state.state = State::Finished;
+                }
+            },
+            true,
+        )
+        .await;
+        if finished {
+            self.disconnection().await?;
+            return Err(anyhow!(crate::errors::AppError::NotAnError));
+        }
+        Ok(())
+    }
+
+    fn write_file_chunk(&mut self, id: i64, chunk: &PayloadChunk) -> Result<bool, anyhow::Error> {
+        let info = self
+            .state
+            .transferred_files
+            .get_mut(&id)
+            .ok_or_else(|| anyhow!("Unknown file payload ID"))?;
+        if chunk.offset() != info.bytes_transferred {
+            return Err(anyhow!("Invalid file offset"));
+        }
+        let next = info
+            .bytes_transferred
+            .checked_add(chunk.body().len() as i64)
+            .ok_or_else(|| anyhow!("File offset overflow"))?;
+        if next > info.total_size {
+            return Err(anyhow!("Transferred file size exceeds introduction"));
+        }
+        let file = info
+            .file
+            .as_mut()
+            .ok_or_else(|| anyhow!("File not accepted"))?;
+        if !chunk.body().is_empty() {
+            file.seek(SeekFrom::Start(info.bytes_transferred as u64))?;
+            file.write_all(chunk.body())?;
+            info.bytes_transferred = next;
+        } else if chunk.flags() & 1 != 0 {
+            if next != info.total_size {
+                return Err(anyhow!("Incomplete file payload"));
+            }
+            file.sync_all()?;
+            self.state.transferred_files.remove(&id);
+            return Ok(self.state.transferred_files.is_empty());
+        }
+        Ok(false)
     }
 
     async fn process_transfer_setup(
@@ -731,6 +709,15 @@ impl InboundRequest {
             .v1
             .as_ref()
             .ok_or_else(|| anyhow!("Missing required fields"))?;
+
+        debug!(
+            "Sharing setup frame type: {:?}, response: {:?}",
+            v1_frame.r#type(),
+            v1_frame
+                .connection_response
+                .as_ref()
+                .map(|response| response.status())
+        );
 
         if v1_frame.r#type() == sharing_nearby::v1_frame::FrameType::Cancel {
             info!("Transfer canceled");
@@ -770,6 +757,25 @@ impl InboundRequest {
             }
             State::ReceivedPairedKeyResult => {
                 debug!("Processing State::ReceivedPairedKeyResult");
+                // Native Quick Share sends its own ACCEPT before its
+                // introduction. This acknowledges sender readiness only;
+                // it must never replace the local user's approval.
+                if v1_frame.r#type() == sharing_nearby::v1_frame::FrameType::Response {
+                    if v1_frame
+                        .connection_response
+                        .as_ref()
+                        .is_some_and(|response| {
+                            response.status()
+                                == sharing_nearby::connection_response_frame::Status::Accept
+                        })
+                    {
+                        return Ok(());
+                    }
+                    return Err(anyhow!("Sender rejected transfer before introduction"));
+                }
+                if v1_frame.r#type() != sharing_nearby::v1_frame::FrameType::Introduction {
+                    return Err(anyhow!("Expected introduction"));
+                }
                 self.process_introduction(v1_frame).await?;
             }
             _ => {
@@ -825,170 +831,107 @@ impl InboundRequest {
         let introduction = v1_frame
             .introduction
             .as_ref()
-            .ok_or_else(|| anyhow!("Missing required fields"))?;
-
-        // No need to inform the channel here, we'll do it anyway with files info
+            .ok_or_else(|| anyhow!("Missing introduction"))?;
+        let mut metadata = self.incoming_metadata();
+        let text_payload = match (
+            introduction.file_metadata.as_slice(),
+            introduction.text_metadata.as_slice(),
+            introduction.wifi_credentials_metadata.as_slice(),
+        ) {
+            (files, [], []) if !files.is_empty() => {
+                self.prepare_incoming_files(files, &mut metadata)?;
+                None
+            }
+            ([], [text], []) if text.r#type() != text_metadata::Type::Unknown => {
+                if !(0..=i64::from(SANE_FRAME_LENGTH)).contains(&text.size()) {
+                    return Err(anyhow!("Invalid text size"));
+                }
+                metadata.text_description = text.text_title.clone();
+                metadata.total_bytes = text.size() as u64;
+                Some(if text.r#type() == text_metadata::Type::Url {
+                    TextPayloadInfo::Url(text.payload_id())
+                } else {
+                    TextPayloadInfo::Text(text.payload_id())
+                })
+            }
+            ([], [], [wifi]) => {
+                metadata.text_description = wifi.ssid.clone();
+                Some(TextPayloadInfo::Wifi((
+                    wifi.payload_id(),
+                    wifi.ssid().to_owned(),
+                )))
+            }
+            _ => {
+                self.reject_transfer(Some(
+                    sharing_nearby::connection_response_frame::Status::UnsupportedAttachmentType,
+                ))
+                .await?;
+                self.update_state(|s| s.state = State::Rejected, true).await;
+                return Err(anyhow!(crate::errors::AppError::NotAnError));
+            }
+        };
+        // Only a validated introduction can occupy a consent slot. Neither
+        // keepalives nor unrelated frontend messages extend this deadline.
+        self.consent_deadline = Some(tokio::time::Instant::now() + CONSENT_TIMEOUT);
+        info!("Asking for user consent");
         self.update_state(
-            |e| {
-                e.state = State::WaitingForUserConsent;
+            |s| {
+                s.state = State::WaitingForUserConsent;
+                s.text_payload = text_payload;
+                s.transfer_metadata = Some(metadata);
             },
-            false,
+            true,
         )
         .await;
+        Ok(())
+    }
 
-        if !introduction.file_metadata.is_empty() && introduction.text_metadata.is_empty() {
-            trace!("process_introduction: handling file_metadata");
-            let mut files_name = Vec::with_capacity(introduction.file_metadata.len());
-            let mut total_bytes: u64 = 0;
-
-            if introduction.file_metadata.len() > 1024 {
-                return Err(anyhow!("Too many files"));
-            }
-            for file in &introduction.file_metadata {
-                let name = file.name();
-                if !is_safe_file_name(name)
-                    || file.size() < 0
-                    || file.size() > (1_i64 << 40)
-                    || self
-                        .state
-                        .transferred_files
-                        .contains_key(&file.payload_id())
-                {
-                    return Err(anyhow!("Invalid file metadata"));
-                }
-                info!("File name: {}", file.name());
-
-                let dest = get_download_dir().join(file.name());
-
-                let info = InternalFileInfo {
-                    payload_id: file.payload_id(),
-                    file_url: dest,
-                    bytes_transferred: 0,
-                    total_size: file.size(),
-                    file: None,
-                    mime_type: file.mime_type().to_owned(),
-                };
-                total_bytes += info.total_size as u64;
-                self.state.transferred_files.insert(file.payload_id(), info);
-                files_name.push(file.name().to_owned());
-            }
-
-            let metadata = TransferMetadata {
-                id: self.state.id.clone(),
-                destination: Some(
-                    get_download_dir()
-                        .into_os_string()
-                        .into_string()
-                        .map_err(|_| anyhow!("failed to convert PathBuf to String"))?,
-                ),
-                source: self.state.remote_device_info.clone(),
-                files: Some(files_name),
-                pin_code: self.state.pin_code.clone(),
-                text_description: None,
-                total_bytes,
-                ..Default::default()
-            };
-
-            info!("Asking for user consent: {:?}", metadata);
-            self.update_state(
-                |e| {
-                    e.transfer_metadata = Some(metadata);
-                },
-                true,
-            )
-            .await;
-        } else if introduction.text_metadata.len() == 1 {
-            trace!("process_introduction: handling text_metadata");
-            let meta = introduction.text_metadata.first().unwrap();
-
-            match meta.r#type() {
-                text_metadata::Type::Url => {
-                    let metadata = TransferMetadata {
-                        id: self.state.id.clone(),
-                        destination: None,
-                        source: self.state.remote_device_info.clone(),
-                        files: None,
-                        pin_code: self.state.pin_code.clone(),
-                        text_description: meta.text_title.clone(),
-                        total_bytes: meta.size().max(0) as u64,
-                        ..Default::default()
-                    };
-
-                    info!("Asking for user consent: {:?}", metadata);
-                    self.update_state(
-                        |e| {
-                            e.text_payload = Some(TextPayloadInfo::Url(meta.payload_id()));
-                            e.transfer_metadata = Some(metadata);
-                        },
-                        true,
-                    )
-                    .await;
-                }
-                text_metadata::Type::PhoneNumber
-                | text_metadata::Type::Address
-                | text_metadata::Type::Text => {
-                    let metadata = TransferMetadata {
-                        id: self.state.id.clone(),
-                        destination: None,
-                        source: self.state.remote_device_info.clone(),
-                        files: None,
-                        pin_code: self.state.pin_code.clone(),
-                        text_description: meta.text_title.clone(),
-                        total_bytes: meta.size().max(0) as u64,
-                        ..Default::default()
-                    };
-
-                    info!("Asking for user consent: {:?}", metadata);
-                    self.update_state(
-                        |e| {
-                            e.text_payload = Some(TextPayloadInfo::Text(meta.payload_id()));
-                            e.transfer_metadata = Some(metadata);
-                        },
-                        true,
-                    )
-                    .await;
-                }
-                text_metadata::Type::Unknown => {
-                    // Reject transfer
-                    self.reject_transfer(Some(
-						sharing_nearby::connection_response_frame::Status::UnsupportedAttachmentType,
-					))
-					.await?;
-                }
-            }
-        } else if introduction.wifi_credentials_metadata.len() == 1 {
-            trace!("process_introduction: handling wifi_credentials_metadata");
-            let meta = introduction.wifi_credentials_metadata.first().unwrap();
-
-            let metadata = TransferMetadata {
-                id: self.state.id.clone(),
-                destination: None,
-                source: self.state.remote_device_info.clone(),
-                files: None,
-                pin_code: self.state.pin_code.clone(),
-                text_description: meta.ssid.clone(),
-                ..Default::default()
-            };
-
-            self.update_state(
-                |e| {
-                    e.text_payload = Some(TextPayloadInfo::Wifi((
-                        meta.payload_id(),
-                        meta.ssid().to_owned(),
-                    )));
-                    e.transfer_metadata = Some(metadata);
-                },
-                true,
-            )
-            .await;
-        } else {
-            // Reject transfer
-            self.reject_transfer(Some(
-                sharing_nearby::connection_response_frame::Status::UnsupportedAttachmentType,
-            ))
-            .await?;
+    fn incoming_metadata(&self) -> TransferMetadata {
+        TransferMetadata {
+            id: self.state.id.clone(),
+            source: self.state.remote_device_info.clone(),
+            pin_code: self.state.pin_code.clone(),
+            ..Default::default()
         }
+    }
 
+    fn prepare_incoming_files(
+        &mut self,
+        files: &[sharing_nearby::FileMetadata],
+        metadata: &mut TransferMetadata,
+    ) -> Result<(), anyhow::Error> {
+        if files.len() > super::sharing_frame::MAX_METADATA_ENTRIES {
+            return Err(anyhow!("Too many files"));
+        }
+        let mut names = Vec::with_capacity(files.len());
+        for file in files {
+            if !is_safe_file_name(file.name())
+                || !(0..=(1_i64 << 40)).contains(&file.size())
+                || self
+                    .state
+                    .transferred_files
+                    .contains_key(&file.payload_id())
+            {
+                return Err(anyhow!("Invalid file metadata"));
+            }
+            let info = InternalFileInfo {
+                file_url: get_download_dir().join(file.name()),
+                bytes_transferred: 0,
+                total_size: file.size(),
+                file: None,
+                mime_type: file.mime_type().to_owned(),
+            };
+            metadata.total_bytes += info.total_size as u64;
+            self.state.transferred_files.insert(file.payload_id(), info);
+            names.push(file.name().to_owned());
+        }
+        metadata.destination = Some(
+            get_download_dir()
+                .into_os_string()
+                .into_string()
+                .map_err(|_| anyhow!("Invalid download directory"))?,
+        );
+        metadata.files = Some(names);
         Ok(())
     }
 
@@ -1156,7 +1099,7 @@ impl InboundRequest {
         )
         .await;
 
-        info!("Pin code: {:?}", self.state.pin_code);
+        debug!("Peer verification code established");
 
         Ok(())
     }
@@ -1450,6 +1393,94 @@ mod tests {
         self as connections, ConnectionRequestFrame, OfflineFrame, V1Frame,
     };
     use crate::utils::DeviceType;
+
+    #[tokio::test]
+    async fn native_sender_accept_does_not_bypass_local_consent() {
+        use crate::sharing_nearby as sharing;
+        let (mut request, _client) = request_pair().await;
+        request.state.state = super::State::ReceivedPairedKeyResult;
+        let ready = sharing::Frame {
+            v1: Some(sharing::V1Frame {
+                r#type: Some(sharing::v1_frame::FrameType::Response.into()),
+                connection_response: Some(sharing::ConnectionResponseFrame {
+                    status: Some(sharing::connection_response_frame::Status::Accept.into()),
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        request.process_transfer_setup(&ready).await.unwrap();
+        assert_eq!(request.state.state, super::State::ReceivedPairedKeyResult);
+        assert!(request.state.transfer_metadata.is_none());
+        assert!(request.consent_deadline.is_none());
+        let intro = sharing::Frame {
+            v1: Some(sharing::V1Frame {
+                r#type: Some(sharing::v1_frame::FrameType::Introduction.into()),
+                introduction: Some(sharing::IntroductionFrame {
+                    text_metadata: vec![sharing::TextMetadata {
+                        r#type: Some(sharing::text_metadata::Type::Text.into()),
+                        payload_id: Some(42),
+                        size: Some(4),
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        request.process_transfer_setup(&intro).await.unwrap();
+        assert_eq!(request.state.state, super::State::WaitingForUserConsent);
+        assert!(request.consent_deadline.is_some());
+        assert!(request
+            .state
+            .transfer_metadata
+            .as_ref()
+            .unwrap()
+            .text_payload
+            .is_none());
+        // A matching text payload still cannot be accepted before consent.
+        let header = super::PayloadHeader {
+            id: Some(42),
+            total_size: Some(4),
+            ..Default::default()
+        };
+        let chunk = super::PayloadChunk {
+            offset: Some(0),
+            flags: Some(1),
+            body: Some(b"test".to_vec()),
+        };
+        assert!(request
+            .process_bytes_payload(&header, &chunk)
+            .await
+            .is_err());
+    }
+
+    async fn request_pair() -> (InboundRequest, tokio::net::TcpStream) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let client = tokio::net::TcpStream::connect(listener.local_addr().unwrap()).await.unwrap();
+        let (socket, _) = listener.accept().await.unwrap();
+        let (sender, _) = tokio::sync::broadcast::channel(16);
+        (InboundRequest::new(socket, "test".into(), sender), client)
+    }
+
+    #[tokio::test]
+    async fn consent_expiry_is_not_extended_by_recent_peer_activity() {
+        let (mut request, _client) = request_pair().await;
+        request.state.state = super::State::WaitingForUserConsent;
+        request.last_activity = tokio::time::Instant::now();
+        request.consent_deadline = Some(tokio::time::Instant::now() - std::time::Duration::from_secs(1));
+        assert!(request.handle().await.unwrap_err().to_string().contains("deadline expired"));
+    }
+
+    #[tokio::test]
+    async fn silent_consent_connection_is_closed_by_absolute_deadline() {
+        let (mut request, _client) = request_pair().await;
+        request.state.state = super::State::WaitingForUserConsent;
+        request.consent_deadline = Some(tokio::time::Instant::now() + std::time::Duration::from_millis(10));
+        let result = tokio::time::timeout(std::time::Duration::from_secs(1), request.handle()).await.unwrap();
+        assert!(result.unwrap_err().to_string().contains("deadline expired"));
+    }
 
     fn connection_request(endpoint_info: Vec<u8>) -> OfflineFrame {
         OfflineFrame {

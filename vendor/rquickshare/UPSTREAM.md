@@ -30,3 +30,42 @@ seek/write and file-length APIs, and hostname lookup without sys_metrics.
 - Implement outbound Quick Share plain-text/URL metadata and encrypted BYTE payloads for clipboard sharing. Preserve UTF-8 text (including control byte 0x10), require consent before completing inbound text, and validate received payload length.
 
 - Keep outbound transfers connected until receiver completion/acknowledgement, handle Android ACK/CONTROL packets without assuming they contain data chunks, and use 64 KiB file chunks. Do not report successful transfer merely because socket writes completed.
+
+## Resource and diagnostic boundaries
+
+- Before decoding sharing protobufs, scan borrowed wire slices to limit the
+  aggregate file/text/Wi-Fi metadata count to 1,024 and certificates to 128.
+  Budgets span duplicate envelopes because protobuf merges singular messages.
+  Keep this check aligned with repeated fields in `wire_format.proto`.
+- Inbound connections are limited to 16 globally and four per IP. Waiting for
+  consent expires after 120 seconds, independently of keepalives. Dropping a
+  connection releases both permits and incomplete files.
+- Desktop and Android discovery retain at most 128 services. Resolution refreshes
+  recency; eviction publishes a removal so consumers do not retain stale entries.
+- Bluetooth profile registrations belong to their connection streams. Connect
+  and accept run concurrently under a single timeout, without detached tasks.
+- Diagnostic formatting excludes outgoing text, file paths, received content,
+  credentials and verification PINs. The application still receives full transfer
+  metadata through serialization; logs are not a substitute for that channel.
+
+Power of 10 principles guide these boundaries, but this desktop/mobile protocol
+engine is not a strictly compliant safety-critical system. Rust/Tokio and GUI
+frameworks allocate during normal operation; network buffers and collections must
+therefore have explicit admission limits rather than a no-allocation claim.
+Long-running service loops are intentional and cancellable. Fallible validation
+returns errors for hostile input rather than relying on process-aborting
+assertions. GTK callbacks and platform conditional compilation remain necessary
+framework boundaries; the native C layer tracks signal handler IDs for cleanup.
+No claim is made about assertion-density or whole-program static stack bounds.
+
+Regression tests cover allocation-amplification inputs, duplicate protobuf
+wrappers, consent expiry, admission/permit cleanup, cache eviction and log
+redaction. Linux CI runs Clippy with warnings denied, pedantic C compilation and
+Clang static analysis, alongside encrypted transfer integration tests.
+
+Native Quick Share interoperability: accept the sender's early ACCEPT response
+while awaiting its introduction, without advancing local consent state. Poco X3
+hardware validation covers native Quick Share text and image sends to the engine,
+image sends back to native Quick Share, matching PINs, exact file contents and
+TRACE-log redaction. The early-response regression test explicitly rejects text
+payloads until the local user approves.

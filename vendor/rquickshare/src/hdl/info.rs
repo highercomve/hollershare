@@ -9,7 +9,6 @@ use crate::utils::RemoteDeviceInfo;
 
 #[derive(Debug)]
 pub struct InternalFileInfo {
-    pub payload_id: i64,
     pub file_url: PathBuf,
     pub bytes_transferred: i64,
     pub total_size: i64,
@@ -18,7 +17,7 @@ pub struct InternalFileInfo {
     pub mime_type: String,
 }
 
-#[derive(Debug, Clone, Default, Deserialize, Serialize, TS)]
+#[derive(Clone, Default, Deserialize, Serialize, TS)]
 #[ts(export)]
 pub struct TransferMetadata {
     pub id: String,
@@ -40,4 +39,43 @@ pub struct TransferMetadata {
 
     pub total_bytes: u64,
     pub ack_bytes: u64,
+}
+
+// Metadata includes clipboard contents, credentials, verification PINs and
+// private file names. Debug is intentionally limited to transfer progress.
+impl std::fmt::Debug for TransferMetadata {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TransferMetadata")
+            .field("id", &self.id)
+            .field("file_count", &self.files.as_ref().map(Vec::len))
+            .field("text_type", &self.text_type)
+            .field("total_bytes", &self.total_bytes)
+            .field("ack_bytes", &self.ack_bytes)
+            .finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn diagnostics_exclude_transfer_secrets() {
+        let secret = "AUDIT_SECRET_MARKER";
+        let metadata = TransferMetadata {
+            pin_code: Some(secret.into()),
+            text_payload: Some(secret.into()),
+            text_description: Some(secret.into()),
+            files: Some(vec![secret.into()]),
+            ..Default::default()
+        };
+        let payload = crate::SendInfo {
+            id: "transfer".into(),
+            name: "peer".into(),
+            addr: "127.0.0.1:1".into(),
+            ob: super::super::OutboundPayload::Text(secret.into()),
+        };
+        assert!(!format!("{metadata:?} {payload:?}").contains(secret));
+        // Serialization to the application still carries the actual contents.
+        assert_eq!(metadata.text_payload.as_deref(), Some(secret));
+    }
 }

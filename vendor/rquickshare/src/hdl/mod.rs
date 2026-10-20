@@ -34,6 +34,7 @@ mod mdns;
 pub use mdns::*;
 mod outbound;
 pub use outbound::*;
+mod sharing_frame;
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS, PartialEq)]

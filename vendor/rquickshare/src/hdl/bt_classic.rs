@@ -15,7 +15,7 @@ use std::time::Duration;
 use anyhow::anyhow;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
-use bluer::rfcomm::{Profile, Role, Stream};
+use bluer::rfcomm::{Profile, ProfileHandle, Role, Stream};
 use bluer::{Address, DiscoveryFilter, DiscoveryTransport, Session};
 use futures::StreamExt;
 use sha2::{Digest, Sha256};
@@ -162,37 +162,87 @@ impl BtDiscovery {
     }
 }
 
-/// An RFCOMM connection to a receiver's Quick Share service: a BlueZ
-/// client profile for it, then BlueZ connects it (finding the channel)
-/// without pairing.
-pub async fn connect(address: Address) -> Result<Stream, anyhow::Error> {
-    let session = Session::new().await?;
-    let adapter = session.default_adapter().await?;
-    let device = adapter.device(address)?;
-    let mut profile = session
-        .register_profile(Profile {
-            uuid: SERVICE_UUID,
-            name: Some("Quick Share".into()),
-            role: Some(Role::Client),
-            require_authentication: Some(false),
-            require_authorization: Some(false),
-            auto_connect: Some(false),
-            ..Default::default()
+/// The profile registration belongs to the stream, so completing, failing or
+/// cancelling a transfer drops both resources. No detached keepalive task.
+#[derive(Debug)]
+pub struct Connection {
+    stream: Stream,
+    _profile: ProfileHandle,
+}
+
+impl tokio::io::AsyncRead for Connection {
+    fn poll_read(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &mut tokio::io::ReadBuf<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        std::pin::Pin::new(&mut self.get_mut().stream).poll_read(cx, buf)
+    }
+}
+
+impl tokio::io::AsyncWrite for Connection {
+    fn poll_write(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &[u8],
+    ) -> std::task::Poll<std::io::Result<usize>> {
+        std::pin::Pin::new(&mut self.get_mut().stream).poll_write(cx, buf)
+    }
+    fn poll_flush(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        std::pin::Pin::new(&mut self.get_mut().stream).poll_flush(cx)
+    }
+    fn poll_shutdown(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        std::pin::Pin::new(&mut self.get_mut().stream).poll_shutdown(cx)
+    }
+}
+
+/// Connect and accept concurrently: BlueZ can wait for accept() before its
+/// connect call returns. Failure/timeout drops both futures and the profile.
+pub async fn connect(address: Address) -> Result<Connection, anyhow::Error> {
+    tokio::time::timeout(Duration::from_secs(20), async {
+        let session = Session::new().await?;
+        let adapter = session.default_adapter().await?;
+        let device = adapter.device(address)?;
+        let mut profile = session
+            .register_profile(Profile {
+                uuid: SERVICE_UUID,
+                name: Some("Quick Share".into()),
+                role: Some(Role::Client),
+                require_authentication: Some(false),
+                require_authorization: Some(false),
+                auto_connect: Some(false),
+                ..Default::default()
+            })
+            .await?;
+        let (_, stream) = tokio::try_join!(
+            async {
+                device
+                    .connect_profile(&SERVICE_UUID)
+                    .await
+                    .map_err(anyhow::Error::from)
+            },
+            async {
+                profile
+                    .next()
+                    .await
+                    .ok_or_else(|| anyhow!("Bluetooth profile closed"))?
+                    .accept()
+                    .map_err(anyhow::Error::from)
+            },
+        )?;
+        Ok(Connection {
+            stream,
+            _profile: profile,
         })
-        .await?;
-    let connecting = tokio::spawn(async move { device.connect_profile(&SERVICE_UUID).await });
-    let request = tokio::time::timeout(Duration::from_secs(20), profile.next())
-        .await
-        .map_err(|_| anyhow!("Bluetooth connection timed out"))?
-        .ok_or_else(|| anyhow!("Bluetooth profile closed"))?;
-    let stream = request.accept()?;
-    // The profile stays registered while the connection lives.
-    tokio::spawn(async move {
-        let _ = connecting.await;
-        let _keep = profile;
-        std::future::pending::<()>().await;
-    });
-    Ok(stream)
+    })
+    .await
+    .map_err(|_| anyhow!("Bluetooth connection timed out"))?
 }
 
 #[cfg(test)]
