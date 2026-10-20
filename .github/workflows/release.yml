@@ -73,7 +73,7 @@ jobs:
     steps:
       - name: System dependencies
         working-directory: ${{ github.workspace }}
-        run: pacman -Syu --noconfirm --needed git openssh ca-certificates curl pkgconf gtk4 webkitgtk-6.0 wayland wayland-protocols libxkbcommon libxtst libx11 dbus ttf-dejavu python python-gobject python-pillow nodejs rust clippy clang protobuf base-devel go squashfs-tools xorg-server-xvfb xdotool xsel imagemagick
+        run: pacman -Syu --noconfirm --needed git openssh ca-certificates curl pkgconf gtk4 webkitgtk-6.0 wayland wayland-protocols libxkbcommon libxtst libx11 dbus ttf-dejavu python python-gobject python-pillow nodejs rust clang protobuf base-devel go squashfs-tools xorg-server-xvfb xdotool xsel imagemagick
       - uses: actions/checkout@v4
         with:
           path: hollershare
