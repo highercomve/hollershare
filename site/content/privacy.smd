@@ -32,7 +32,7 @@ Settings remain until reset, removed or cleared through the operating system. Re
 
 # Update checks and external services
 
-The GitHub-distributed application contacts GitHub to check for releases and, where supported, download updates. GitHub receives ordinary connection information such as your IP address and request headers. The Google Play build uses Google Play for updates and does not make HollerShare's GitHub update checks.
+The Android app installed from Google Play never checks for or downloads updates itself: Google Play delivers its updates, and the app does not contact GitHub, the HollerShare website or any other update server. The desktop app and the Android APK downloaded from GitHub check GitHub for new releases shortly after starting and every six hours. The desktop app can then download and install a signed update when you choose to; the GitHub APK only opens the release page in your browser. When they check, GitHub receives ordinary connection information such as your IP address and request headers.
 
 Downloading the app, visiting GitHub support pages or installing it through Google Play also involves those services. Their own privacy policies apply. HollerShare includes no advertising SDK, analytics SDK, account system or automatic crash-report upload.
 
