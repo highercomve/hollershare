@@ -1,10 +1,10 @@
 ---
 .title = "Privacy policy",
 .description = "How HollerShare handles files, text and device information.",
-.date = .date("2026-10-06T00:00:00"),
+.date = .date("2026-10-21T00:00:00"),
 .layout = "page.shtml",
 ---
-Effective date: October 6, 2026.
+Effective date: October 21, 2026.
 
 # Who provides HollerShare
 
@@ -38,7 +38,7 @@ Downloading the app, visiting GitHub support pages or installing it through Goog
 
 # The website
 
-The website is hosted by GitHub Pages. It uses no analytics, tracking cookies or third-party font service. GitHub may process connection information, including IP addresses and request logs, to provide hosting. Download and support links lead to GitHub. See [GitHub's privacy statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement) and [Google's privacy policy](https://policies.google.com/privacy) for their services.
+The website is hosted by Cloudflare Pages. It uses no analytics, tracking cookies or third-party font service. Cloudflare may process connection information, including IP addresses, browser user agents and the pages requested, to serve and protect the site. Old links on highercomve.github.io redirect here through GitHub Pages, and download and support links lead to GitHub; GitHub's privacy statement applies there. See [Cloudflare's privacy policy](https://www.cloudflare.com/privacypolicy/) and [Google's privacy policy](https://policies.google.com/privacy) for their services.
 
 # Security and your choices
 
