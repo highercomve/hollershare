@@ -2,7 +2,7 @@
 
 The listing text is in `listing.md`. Artwork is in `assets/`.
 Developer: Sergio A Marin. Support: sergio.alejandro.mz@gmail.com.
-Privacy URL: https://highercomve.github.io/hollershare/privacy/.
+Privacy URL: https://hollershare.foreachdeveloper.com/privacy/.
 
 ## Build and signing
 

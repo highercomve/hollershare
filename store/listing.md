@@ -2,8 +2,8 @@
 
 Developer: Sergio A Marin
 Public support email: sergio.alejandro.mz@gmail.com
-Website: https://highercomve.github.io/hollershare/
-Privacy policy: https://highercomve.github.io/hollershare/privacy/
+Website: https://hollershare.foreachdeveloper.com/
+Privacy policy: https://hollershare.foreachdeveloper.com/privacy/
 Application ID: dev.hollershare.App
 Suggested category: Tools
 Pricing: Free
@@ -45,7 +45,7 @@ HollerShare is an independent open-source application. It is not affiliated with
 
 Support: sergio.alejandro.mz@gmail.com
 Source code: https://github.com/highercomve/hollershare
-Privacy: https://highercomve.github.io/hollershare/privacy/
+Privacy: https://hollershare.foreachdeveloper.com/privacy/
 
 ## Release notes
 

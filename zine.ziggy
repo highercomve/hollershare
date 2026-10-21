@@ -2,10 +2,10 @@
 .supermd = .{ .headings_h2 = true },
 .site = .simple(.{
     .title = "HollerShare",
-    .host_url = "https://highercomve.github.io",
+    .host_url = "https://hollershare.foreachdeveloper.com",
     .content_dir_path = "site/content",
     .layouts_dir_path = "site/layouts",
     .assets_dir_path = "site/assets",
-    .url_path_prefix = "hollershare",
+    .url_path_prefix = "",
     .static_assets = ["fonts"],
 }),

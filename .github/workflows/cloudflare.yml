@@ -2,7 +2,7 @@ name: Cloudflare Pages
 on:
   push:
     branches: [main]
-    paths: ['site/**', 'zine.ziggy', '.github/workflows/cloudflare.yml', 'scripts/site-for-cloudflare.sh', 'scripts/sync-privacy.py', 'frontend/index.html']
+    paths: ['site/**', 'zine.ziggy', '.github/workflows/cloudflare.yml', 'scripts/sync-privacy.py', 'frontend/index.html']
   workflow_dispatch:
 permissions:
   contents: read
@@ -19,7 +19,7 @@ jobs:
       HAS_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
     steps:
       - uses: actions/checkout@v4
-      # Must run before the rewrite below, which changes the policy URL in privacy.smd.
+      # The app's offline policy copy must match site/content/privacy.smd.
       - name: Check offline privacy policy
         run: python3 scripts/sync-privacy.py --check
       - name: Install Zine 0.14.0
@@ -28,8 +28,6 @@ jobs:
           tar xJf "$RUNNER_TEMP/zine.tar.xz" -C "$RUNNER_TEMP"
           chmod +x "$RUNNER_TEMP/zine"
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
-      - name: Serve from hollershare.foreachdeveloper.com
-        run: scripts/site-for-cloudflare.sh hollershare hollershare
       - run: zine release
       - name: Skip without Cloudflare credentials
         if: env.HAS_TOKEN != 'true'

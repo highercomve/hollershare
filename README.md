@@ -6,6 +6,8 @@
 
 A native Oriel desktop app for sharing files over your local network with other computers and Android Quick Share. The UI runs on Oriel’s `native_ui` renderer (QuickJS, native DOM, Yoga and platform drawing), without a WebView.
 
+Website: [hollershare.foreachdeveloper.com](https://hollershare.foreachdeveloper.com/), with a guide and the privacy policy.
+
 Download packaged builds from [Releases](https://github.com/highercomve/hollershare/releases), or build from source below.
 
 ## Build and run
@@ -169,9 +171,9 @@ Signing material is supplied only to trusted tag or explicitly signed manual bui
 
 ## Website and Google Play
 
-The [HollerShare website](https://highercomve.github.io/hollershare/) includes a guide and the
-[privacy policy](https://highercomve.github.io/hollershare/privacy/). The site uses Zine and deploys
-to GitHub Pages; see [`site/README.md`](site/README.md). Google Play distribution is being prepared.
+The [HollerShare website](https://hollershare.foreachdeveloper.com/) includes a guide and the
+[privacy policy](https://hollershare.foreachdeveloper.com/privacy/). The site uses Zine and deploys
+to Cloudflare Pages; see [`site/README.md`](site/README.md). Google Play distribution is being prepared.
 Listing text, store artwork, signed-build instructions and the closed-testing checklist are in
 [`store/`](store/README.md). Play builds use `-Dplay-store=true` and receive updates through Google Play.
 Oriel 0.9.3 generates Android projects targeting API 36.
