@@ -2,6 +2,18 @@
 
 Notable changes in HollerShare releases.
 
+## [1.1.5] — 2026-11-03
+
+Built on Oriel 0.20.11. 1.1.4 was tagged but not published: its builds could
+not fetch Oriel 0.18.0, whose pinned commit no longer exists upstream. Its
+change ships in this release.
+
+### Fixed
+
+- The Linux tray icon is readable on dark panels. It used the green mark made
+  for light backgrounds, which disappeared into dark panels; Linux now gets the
+  sage and coral mark made for dark backgrounds.
+
 ## [1.1.4] — 2026-11-03
 
 ### Fixed
