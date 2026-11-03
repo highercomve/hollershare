@@ -9,6 +9,7 @@ background (`#234b3a`), a warm white horn (`#fff7ea`) and a coral arrow
 - `hollershare-mark.svg`: transparent green/coral mark for light backgrounds.
 - `hollershare-mark-dark.svg`: sage/coral mark for dark backgrounds.
 - `hollershare-tray.png`: transparent 128px tray icon.
+- `hollershare-tray-dark.png`: the dark-background mark as a 128px tray icon, used on Linux, whose panels are usually dark.
 - `frontend/brand-mark.png` and `brand-mark-dark.png`: header marks.
 
 Android resources are in `src/android/res`. Adaptive icons on Android 8+
@@ -27,6 +28,7 @@ Regenerate PNGs from the repository root with librsvg:
 ```sh
 rsvg-convert -w 1024 -h 1024 assets/brand/hollershare-icon.svg -o assets/brand/hollershare-icon.png
 rsvg-convert -w 128 -h 128 assets/brand/hollershare-mark.svg -o assets/brand/hollershare-tray.png
+rsvg-convert -w 128 -h 128 assets/brand/hollershare-mark-dark.svg -o assets/brand/hollershare-tray-dark.png
 rsvg-convert -w 160 -h 160 assets/brand/hollershare-mark.svg -o frontend/brand-mark.png
 rsvg-convert -w 160 -h 160 assets/brand/hollershare-mark-dark.svg -o frontend/brand-mark-dark.png
 cp assets/brand/hollershare-icon.png icon.png

@@ -2,6 +2,14 @@
 
 Notable changes in HollerShare releases.
 
+## [1.1.4] — 2026-11-03
+
+### Fixed
+
+- The Linux tray icon is readable on dark panels. It used the green mark made
+  for light backgrounds, which disappeared into dark panels; Linux now gets the
+  sage and coral mark made for dark backgrounds.
+
 ## [1.1.3] — 2026-10-20
 
 Built on Oriel 0.18.0.

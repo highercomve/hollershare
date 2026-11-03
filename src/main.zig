@@ -216,7 +216,9 @@ fn setup() !void {
         .id = "dev.hollershare.App",
         .title = "HollerShare",
         .tooltip = "Share files nearby",
-        .icon = .{ .png = @import("tray_icon").bytes },
+        // Linux panels are dark on most desktops (GNOME's even in light
+        // mode), where the green mark disappears: use the dark-panel mark.
+        .icon = .{ .png = if (builtin.os.tag == .linux) @import("tray_icon").dark_bytes else @import("tray_icon").bytes },
         .menu = &.{
             .{ .item = .{ .id = "show", .label = "Show HollerShare" } },
             .{ .item = .{ .id = "send", .label = "Send files…" } },
