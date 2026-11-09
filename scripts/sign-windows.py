@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Sign Oriel's app payload, rebuild its NSIS installer, then sign the installer."""
+"""Sign Oriel's app payload and the updater executable, rebuild its NSIS installer, then sign the installer."""
 import base64
 import os
 from pathlib import Path
@@ -82,9 +82,16 @@ with tempfile.TemporaryDirectory(prefix="hollershare-sign-", dir=os.environ["RUN
             raise SystemExit(f"Code signing failed (exit {last_error})")
         subprocess.run([signtool, "verify", "/pa", str(path)], check=True)
     binary = Path(payload.group(1).replace("$$", "$"))
+    # The updater payload (`zig build package-executable`) is the same checked
+    # executable the installer packs: replace it with the signed copy so the
+    # installer and the in-app update ship identical, signed binaries.
+    updates = sorted(Path("zig-out/package").glob("hollershare-*-x86_64-windows.exe"))
+    if len(updates) != 1:
+        raise SystemExit("Expected one updater executable from `zig build package-executable` in zig-out/package, found: " + (", ".join(map(str, updates)) or "none"))
+    if updates[0].read_bytes() != binary.read_bytes():
+        raise SystemExit(f"{updates[0]} is not the executable the installer packs ({binary}); build both with the same flags")
     sign(binary)
-    Path("zig-out/bin").mkdir(parents=True, exist_ok=True)
-    shutil.copy2(binary, "zig-out/bin/hollershare.exe")
+    shutil.copy2(binary, updates[0])
     subprocess.run([makensis, "/NOCD", "/WX", str(script.resolve())], check=True)
     setup = Path(installer.group(1).replace("$$", "$"))
     sign(setup)

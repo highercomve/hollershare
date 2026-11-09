@@ -95,9 +95,12 @@ jobs:
           clang -fsyntax-only -Wall -Wextra -Wpedantic -Werror $(pkg-config --cflags gtk4 gio-2.0) src/desktop_linux.c
           clang --analyze -Wall -Wextra -Wpedantic -Werror $(pkg-config --cflags gtk4 gio-2.0) src/desktop_linux.c -o /tmp/hollershare-desktop-analysis.plist
       - name: Oriel packages (native UI)
+        # zig-out/bin is only for the integration tests below; the release
+        # publishes from zig-out/package (packages and the updater executable).
         run: |
           oriel build -Doptimize=ReleaseSafe -Dcpu=baseline
           oriel package -Doptimize=ReleaseSafe -Dcpu=baseline
+          oriel build package-executable -Doptimize=ReleaseSafe -Dcpu=baseline
       - name: Encrypted transfer integration tests
         run: python tests/quickshare_loopback.py
       - name: Native desktop integration tests
@@ -208,9 +211,9 @@ jobs:
           if ($makensis) { Add-Content $env:GITHUB_PATH $makensis.DirectoryName }
       - name: Oriel packages
         run: |
-          oriel build -Doptimize=ReleaseSafe -Dtarget=x86_64-windows-gnu -Drust-target=x86_64-pc-windows-gnu
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           oriel package -Doptimize=ReleaseSafe -Dtarget=x86_64-windows-gnu -Drust-target=x86_64-pc-windows-gnu
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          oriel build package-executable -Doptimize=ReleaseSafe -Dtarget=x86_64-windows-gnu -Drust-target=x86_64-pc-windows-gnu
       - name: Sign app and installer
         if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.sign)
         env:
