@@ -2,6 +2,17 @@
 
 Notable changes in HollerShare releases.
 
+## [1.1.6] — 2026-11-09
+
+Built on Oriel 0.20.15.
+
+### Changed
+
+- The in-app updater downloads the executable Oriel checks and strips for
+  packages (`zig build package-executable`), the same binary the packages
+  ship, instead of the raw build output. Release builds are checked to contain
+  none of Oriel's development-only agent control.
+
 ## [1.1.5] — 2026-11-03
 
 Built on Oriel 0.20.11. 1.1.4 was tagged but not published: its builds could

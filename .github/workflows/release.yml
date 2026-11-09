@@ -32,7 +32,7 @@ defaults:
   run:
     working-directory: hollershare
 env:
-  HOLLERSHARE_VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '1.1.5' }}
+  HOLLERSHARE_VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '1.1.6' }}
 jobs:
   framework-ready:
     runs-on: ubuntu-latest
