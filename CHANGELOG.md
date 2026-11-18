@@ -2,6 +2,16 @@
 
 Notable changes in HollerShare releases.
 
+## [1.2.1] — 2026-11-18
+
+Built on Oriel 0.20.16.
+
+### Fixed
+
+- Android devices without a back camera, or without autofocus, can install
+  and update HollerShare again: the camera permission added for "Use as
+  webcam" made Google Play treat both as required.
+
 ## [1.2.0] — 2026-11-18
 
 Built on Oriel 0.20.16.

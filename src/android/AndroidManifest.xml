@@ -10,6 +10,10 @@
     <!-- "Use as webcam" (src/android/CameraExtension.kt): asked for when it is turned on. -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
+    <!-- CAMERA otherwise implies a required back camera with autofocus, and Play
+         would hide the app from devices without one. -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
     <!-- oriel:permissions begin -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
