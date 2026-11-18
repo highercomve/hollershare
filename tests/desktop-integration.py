@@ -146,7 +146,7 @@ def main():
             pump(visible)
             time.sleep(1)
             command("import", "-window", "root", "artifacts/incoming-ui.png")
-            command("xdotool", "mousemove", "--window", window, "284", "526", "click", "1")
+            command("xdotool", "mousemove", "--window", window, "298", "279", "click", "1")
             pump(lambda: subprocess.run(["xdotool", "search", "--onlyvisible", "--name", "Save incoming files"], capture_output=True).returncode == 0)
             folder_dialog = command("xdotool", "search", "--onlyvisible", "--name", "Save incoming files").splitlines()[0]
             command("xdotool", "windowfocus", "--sync", folder_dialog)
@@ -154,7 +154,7 @@ def main():
             pump(lambda: subprocess.run(["xdotool", "search", "--onlyvisible", "--name", "Save incoming files"], capture_output=True).returncode != 0)
             assert not list((folder / "received").iterdir()), "Cancelling the folder picker must leave approval pending"
             time.sleep(.5)
-            command("xdotool", "mousemove", "--window", window, "138", "526", "click", "1")
+            command("xdotool", "mousemove", "--window", window, "135", "279", "click", "1")
             pump(lambda: (folder / "received" / path.name).exists() and (folder / "received" / path.name).read_bytes() == path.read_bytes())
             pump(lambda: len(notifications) >= 2)
             assert notifications[-1][3] == "Files received"
@@ -209,22 +209,41 @@ def main():
             pump(visible)
             time.sleep(1)
             command("import", "-window", "root", "artifacts/clipboard-ui.png")
-            # Nearby devices change the manual address field's vertical position.
-            # Find its paper-colored interior within the right-hand panel.
+            # Nearby devices change the manual address fold's vertical position.
+            # Its top border is a 1px line across the right-hand panel; the
+            # "Send to an address instead" summary sits just below it.
+            command("import", "-window", window, "artifacts/clipboard-closed-ui.png")
+            with Image.open("artifacts/clipboard-closed-ui.png") as image:
+                pixels = image.convert("RGB")
+                card = (252, 250, 245)
+                lines = []
+                y = 250
+                while y < min(700, pixels.height):
+                    colour = pixels.getpixel((530, y))
+                    if colour != card and pixels.getpixel((940, y)) == card and all(pixels.getpixel((x, y)) == colour for x in range(530, 900, 10)):
+                        end = y
+                        while end + 1 < pixels.height and pixels.getpixel((530, end + 1)) == colour: end += 1
+                        if end - y < 3: lines.append(y)
+                        y = end
+                    y += 1
+                assert len(lines) == 1, f"Could not locate the manual address fold: {lines}"
+            command("xdotool", "mousemove", "--window", window, "560", str(lines[0] + 23), "click", "1")
+            time.sleep(.5)
+            # Find the address field's paper-colored interior within the panel.
             command("import", "-window", window, "artifacts/clipboard-send-ui.png")
             with Image.open("artifacts/clipboard-send-ui.png") as image:
                 pixels = image.convert("RGB")
                 runs = []
                 start = None
                 for y in range(250, min(700, pixels.height)):
-                    if pixels.getpixel((650, y)) == (245, 241, 233) and pixels.getpixel((518, y)) == (252, 250, 245):
+                    if pixels.getpixel((840, y)) == (245, 241, 233) and pixels.getpixel((518, y)) == (252, 250, 245):
                         if start is None: start = y
                     elif start is not None:
                         if 20 <= y - start <= 60: runs.append((start + y) // 2)
                         start = None
                 assert len(runs) == 1, f"Could not locate the manual address field: {runs}"
                 address_y = runs[0]
-            command("xdotool", "mousemove", "--window", window, "650", str(address_y), "click", "1", "key", "ctrl+a")
+            command("xdotool", "mousemove", "--window", window, "840", str(address_y), "click", "1", "key", "ctrl+a")
             command("xdotool", "type", "--clearmodifiers", f"127.0.0.1:{sender_port}")
             command("xdotool", "mousemove", "--window", window, "895", str(address_y), "click", "1")
             def clipboard_sent():
