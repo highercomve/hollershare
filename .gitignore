@@ -19,3 +19,4 @@ dist/
 # Zine output and local build cache
 /public/
 /.zine/
+.playwright-mcp/
