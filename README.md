@@ -115,19 +115,24 @@ choose a fixed port with the existing environment variable and allow that port
 on your trusted local network:
 
 ```sh
-HOLLERSHARE_PORT=12365 hollershare
+HOLLERSHARE_PORT=12370 hollershare
 ```
+
+If that port is already taken (another program or a container publishing it),
+HollerShare uses a dynamic port instead of failing to start, and mDNS advertises
+the port it got. `quickshare.log` in the app's state directory records the
+fallback.
 
 For firewalld, first run `firewall-cmd --get-active-zones`. In the following
 example, replace `home` with the zone assigned to your local network interface:
 
 ```sh
-sudo firewall-cmd --zone=home --add-port=12365/tcp
-sudo firewall-cmd --permanent --zone=home --add-port=12365/tcp
+sudo firewall-cmd --zone=home --add-port=12370/tcp
+sudo firewall-cmd --permanent --zone=home --add-port=12370/tcp
 ```
 
 Keep `HOLLERSHARE_PORT` set for future launches, including the desktop launcher
-(for example, `Exec=env HOLLERSHARE_PORT=12365 /path/to/hollershare`). Reinstalling
+(for example, `Exec=env HOLLERSHARE_PORT=12370 /path/to/hollershare`). Reinstalling
 the desktop launcher may replace a local edit. Choose a different allowed port
 if another application uses it. HollerShare does not change firewall rules.
 On Windows and macOS, allow HollerShare through the firewall on your trusted
@@ -220,8 +225,26 @@ GPL-3.0-only, consistent with the integrated RQuickShare dependency. Oriel is MI
 
 ## Clipboard sharing
 
-Choose **Clipboard text**, then **Paste clipboard** (or type text), review it, and select a nearby device. The tray also has **Send clipboard…**. Text and links use Quick Share text/BYTE payloads, with the same confirmation code and receiver approval as files. Text is limited to 1 MB and, once the receiver accepts it, is put on that device's clipboard automatically (the notification and the app's **Copy text** action put it there again). Clipboard images are not implemented.
+Choose **Clipboard text**, then **Paste clipboard** (or type text), review it, and select a nearby device. The tray also has **Send clipboard…**. Text and links use Quick Share text/BYTE payloads, with the same confirmation code and receiver approval as files. Text is limited to 1 MB and, once the receiver accepts it, is put on that device's clipboard automatically (the notification and the app's **Copy text** action put it there again).
+
+When the clipboard holds an image and no text, **Paste clipboard** (and the tray's **Send clipboard…**) adds it to the batch as a PNG file named `HollerShare clipboard <date> <time>.png`, kept in HollerShare's cache folder (removed the next time you paste an image, once it is a day old). Quick Share has no clipboard flag, so that name is the flag: a HollerShare receiver that accepts one file named like this saves it as usual and also puts it on its clipboard, as it does with text. Any other single PNG image received (a phone's screenshot, say) gets a **Copy image** action on its notification; other formats, such as JPEG photos, are saved but not offered, because clipboards take them as PNG only. PNG images up to 32 MB go on the clipboard. On Android, Copy image is offered only while received files stay in HollerShare's folder, because they move to the folder chosen in Settings.
 
 Received text appears in Activity with **Copy text**, also available on its completion notification. Accepting text copies it to the clipboard and keeps it in the current session without creating a downloaded file.
 
 Quick Share errors are saved in the application state directory (`~/.local/state/hollershare/quickshare.log` on Linux). The previous log is retained when a log larger than 1 MB is rotated at startup. Outbound transfers remain active until the receiver confirms completion; a receiver that never confirms times out after 30 seconds.
+
+## Phone camera (webcam)
+
+An Android phone running HollerShare can be a Linux computer's webcam. On the phone, tap **Use as webcam**: it asks for the camera permission once, then shows a 6-digit code. On the computer, open **Phone camera**, tap **Find phones**, pick the phone, type the code and **Connect**. Video apps (browsers, Zoom, OBS) then list **HollerShare Camera** with their cameras.
+
+While streaming, **Switch camera** changes between the phone's back and front cameras, **Rotate** turns the picture in quarter turns, **Mirror** flips it horizontally, **Fill frame** toggles between filling the frame (cropped) and fitting portrait video with black bars, and **Stop** on either device ends the session. On the computer, you can pick the resolution (**480p**, **720p**, or **1080p**), frame rate (**15**, **24**, or **30** fps), and picture quality (**Light**, **Balanced**, **Sharp**, or **Best**). Frame rate and picture quality update live; changing the resolution reconnects at the new size. View and quality settings are saved in `camera.json` in the app's data directory.
+
+This doesn't use Quick Share. The phone listens on TCP port 47311 (another one if that's taken) and answers discovery broadcasts on UDP 47310, so a firewall on the computer must let those answers back in. The two devices agree on keys from the code with a password-authenticated key exchange (CPace on ristretto255): the code never travels, someone watching the network can't test codes against what they see, and each side checks the other knows the code before the phone's camera turns on. Every frame and control after that is encrypted and authenticated (ChaCha20-Poly1305). A wrong code makes the phone wait longer before answering the next attempt, and ten in a row turn Use as webcam off until you turn it on again (with a new code). Frames are MJPEG JPEGs (480p, 720p, or 1080p at 15, 24, or 30 fps). Both devices need this version: older HollerShare camera versions don't connect. The phone's camera runs only while a computer is connected. HollerShare must stay open on the phone (Android stops the camera of apps in the background), and it keeps the screen on. The phone rotates the picture upright automatically however it is held.
+
+The computer writes the frames as MJPEG straight into a v4l2loopback device, so it doesn't decode the video. The device needs the v4l2loopback driver from your distribution (`v4l2loopback-dkms`, `akmod-v4l2loopback`, `v4l2loopback-utils`…), and setup needs `flock` (from `util-linux`, installed almost everywhere). **Set up HollerShare Camera** adds it once, with the administrator password (`pkexec`). When no other program uses v4l2loopback, it writes `/etc/modprobe.d/hollershare-camera.conf` and `/etc/modules-load.d/hollershare-camera.conf` so the device comes back after a restart. When the driver is already loaded by another program (OBS's virtual camera, say) or configured by another file in any `modprobe.d` directory, it never changes that setup: it adds the HollerShare Camera beside it with `v4l2loopback-ctl add` (from `v4l2loopback-utils`), for this session only, so run Setup again after a restart. If setup fails, files it created are removed and files it changed get their old contents back. A video app that already has the camera open keeps the resolution it opened it with: HollerShare streams at that one when the phone can (and says so), otherwise it says the app holds another resolution; close the app, then Stop and Connect again, to change it. To load the device by hand:
+
+```sh
+sudo modprobe v4l2loopback devices=1 card_label="HollerShare Camera" exclusive_caps=1
+```
+
+The camera is available on Android (the phone) and Linux (the computer), with the page renderers (`native`, `webview`). The `oriel` renderer doesn't show it yet. The code is in `src/camera/` (Zig, both ends) and `src/android/CameraExtension.kt` (the phone's Camera2 capture and JPEG encoding).

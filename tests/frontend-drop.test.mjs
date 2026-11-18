@@ -22,6 +22,7 @@ for (const resolved of ["/tmp/example.apk"]) {
       $:id => {if(!elements.has(id)) elements.set(id,{}); return elements.get(id);},
       error:message => errors.push(message),
       call:async (command,args) => calls.push({command,args}),
+      document:{querySelector:() => null}, platform_android:false,
     });
     vm.runInContext(drop + send, context);
     await context.drop_received({preventDefault(){}});

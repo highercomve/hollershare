@@ -7,7 +7,7 @@ pub fn build(b: *std.Build) void {
     const target = oriel.resolveTarget(b, b.standardTargetOptions(.{}));
     const optimize = b.standardOptimizeOption(.{});
     const android = target.result.abi == .android;
-    const version = std.mem.trimStart(u8, b.option([]const u8, "app-version", "Package version") orelse b.graph.environ_map.get("HOLLERSHARE_VERSION") orelse "1.1.6", "v");
+    const version = std.mem.trimStart(u8, b.option([]const u8, "app-version", "Package version") orelse b.graph.environ_map.get("HOLLERSHARE_VERSION") orelse "1.2.0", "v");
     _ = std.SemanticVersion.parse(version) catch @panic("Package version must be semantic version, e.g. 0.1.0");
     // How the window is drawn: the page in a WebView, the page on native
     // widgets (the default), or the .oriel views in views/ from Zig
@@ -76,11 +76,29 @@ pub fn build(b: *std.Build) void {
             // mDNS discovery on the LAN (Android: the Wi-Fi multicast lock).
             .local_network = "Find and reach devices on your network to share files with",
         },
-        // HollerShare's Kotlin: the BLE beacon and the share sheet handler.
-        .android = .{ .sources = &.{
-            b.path("src/android/QuickShareBeacon.kt"),
-            b.path("src/android/ShareActivity.kt"),
-        } },
+        // HollerShare's Kotlin: the BLE beacon, the share sheet handler,
+        // and the status and navigation bars in the page's colours (a
+        // platform hook: Android 15 ignores theme-color for them).
+        .android = .{
+            .sources = &.{
+                b.path("src/android/QuickShareBeacon.kt"),
+                b.path("src/android/ShareActivity.kt"),
+            },
+            .hooks = &.{.{ .class = "dev.hollershare.SystemBars", .sources = &.{b.path("src/android/SystemBars.kt")} }},
+        },
+        // "Use as webcam": the phone's camera, as JPEG frames
+        // (src/camera/camera_android.zig calls it; the network is Zig).
+        .extensions = &.{.{
+            .name = "hollershare.camera",
+            .android = .{
+                .class = "dev.hollershare.CameraExtension",
+                .sources = &.{b.path("src/android/CameraExtension.kt")},
+            },
+            .max_bytes = 8 * 1024 * 1024,
+            // A frame call waits for the camera while start, switch or
+            // stop come in.
+            .concurrency = 3,
+        }},
         .package = .{
             .id = "dev.hollershare.App",
             .name = "HollerShare",
@@ -169,4 +187,26 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     }) });
     test_step.dependOn(&b.addRunArtifact(settings_tests).step);
+    const clipboard_tests = b.addTest(.{ .root_module = b.createModule(.{
+        .root_source_file = b.path("src/clipboard_image.zig"),
+        .target = b.graph.host,
+        .optimize = optimize,
+    }) });
+    test_step.dependOn(&b.addRunArtifact(clipboard_tests).step);
+    // The phone camera: the protocol on every host; both ends on loopback,
+    // the video device and its setup on Linux, the only computer side
+    // (test.zig runs the protocol tests too).
+    const host_linux = b.graph.host.result.os.tag == .linux;
+    const camera_suites: []const []const u8 = if (host_linux)
+        &.{ "src/camera/test.zig", "src/camera/v4l2.zig", "src/camera/v4l2_setup.zig", "src/camera/app.zig" }
+    else
+        &.{"src/camera/protocol.zig"};
+    for (camera_suites) |path| {
+        const camera_tests = b.addTest(.{ .root_module = b.createModule(.{
+            .root_source_file = b.path(path),
+            .target = b.graph.host,
+            .optimize = optimize,
+        }) });
+        test_step.dependOn(&b.addRunArtifact(camera_tests).step);
+    }
 }

@@ -9,6 +9,8 @@ const app = @import("oriel_app");
 const updates = @import("updates.zig");
 const cli = @import("cli.zig");
 const settings = @import("settings.zig");
+const clipboard_image = @import("clipboard_image.zig");
+const camera = @import("camera/app.zig");
 const android_multicast = if (builtin.abi == .android) @import("android_multicast.zig") else struct {
     pub fn acquire() void {}
     pub fn release() void {}
@@ -54,7 +56,9 @@ var device_visible: std.atomic.Value(bool) = .init(true);
 /// the page asks the user to choose again. Cleared by a new choice.
 var folder_unavailable: std.atomic.Value(bool) = .init(false);
 
-const ClipboardText = struct { text: []const u8 };
+/// What "Paste clipboard" found: its text, or (no text) an image saved as a
+/// PNG file to add to the batch.
+const ClipboardContent = struct { text: []const u8, image: ?FileSelection = null };
 const FileSelection = struct { path: []const u8, name: []const u8, size: u64 };
 fn request_json(allocator: std.mem.Allocator, value: anytype) ![]const u8 {
     const json = try std.json.Stringify.valueAlloc(allocator, value, .{});
@@ -244,7 +248,9 @@ export fn hollershare_review_transfer(id: [*:0]const u8) void {
 const NotificationEvent = struct { bytes: [4096]u8, len: usize };
 fn transfer_event(json: [*:0]const u8) callconv(.c) void {
     const source = std.mem.span(json);
-    if (android) relocation.onEvent(source);
+    // Finished files: a thread of their own looks for a single image (to
+    // copy it, or offer to), then notifies and, on Android, moves them.
+    if (received.start(source)) return;
     if (source.len > 4096) return;
     var event: NotificationEvent = .{ .bytes = undefined, .len = source.len };
     @memcpy(event.bytes[0..source.len], source);
@@ -254,7 +260,7 @@ fn notify_main(event: NotificationEvent) void {
     var arena: std.heap.ArenaAllocator = .init(std.heap.smp_allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const parsed = std.json.parseFromSlice(struct { id: []const u8, kind: []const u8, name: []const u8, pin: ?[]const u8 = null, text: bool = false }, allocator, event.bytes[0..event.len], .{}) catch return;
+    const parsed = std.json.parseFromSlice(struct { id: []const u8, kind: []const u8, name: []const u8, pin: ?[]const u8 = null, text: bool = false, image: received.Image = .none }, allocator, event.bytes[0..event.len], .{ .ignore_unknown_fields = true }) catch return;
     const dismiss = std.mem.eql(u8, parsed.value.kind, "dismiss");
     if (desktop_linux and (dismiss or !@hasDecl(oriel.notification, "onAction"))) {
         const id = allocator.dupeZ(u8, parsed.value.id) catch return;
@@ -272,6 +278,10 @@ fn notify_main(event: NotificationEvent) void {
     // the "Copy text" action stays for when the clipboard moved on.
     if (!incoming and parsed.value.text) {
         copy_received_text(parsed.value.id, parsed.value.name);
+        return;
+    }
+    if (!incoming and parsed.value.image != .none) {
+        notify_image(allocator, parsed.value.id, parsed.value.name, parsed.value.image);
         return;
     }
     const body = std.fmt.allocPrint(allocator, "{s}{s}{s}{s}", .{ parsed.value.name, if (incoming) (if (parsed.value.text) " wants to share text. Compare this code before accepting: " else " wants to share files. Compare this code before accepting: ") else " · Files are ready. Open HollerShare to view them.", (if (incoming) parsed.value.pin orelse "" else ""), if (incoming and !parsed.value.text) " · Accept saves to the default folder." else "" }) catch return;
@@ -347,10 +357,121 @@ fn notify_text_outcome(outcome: TextCopyOutcome) void {
         },
     }) catch {};
 }
+/// "Image received": already on the clipboard (a HollerShare clipboard
+/// image), or with a Copy image action.
+fn notify_image(allocator: std.mem.Allocator, id: []const u8, name: []const u8, image: received.Image) void {
+    const copied = image == .copied;
+    const body = std.fmt.allocPrint(allocator, "{s} · {s}", .{ name, if (copied) "Copied to your clipboard." else "Copy it to paste it anywhere." }) catch return;
+    const open: []const oriel.notification.Action = if (android) &.{
+        .{ .id = "review", .label = "Review" },
+    } else &.{
+        .{ .id = "open_file", .label = "Open file" },
+        .{ .id = "open_folder", .label = "Open folder" },
+    };
+    const with_copy: []const oriel.notification.Action = if (android) &.{
+        .{ .id = "copy_image", .label = "Copy image" },
+        .{ .id = "review", .label = "Review" },
+    } else &.{
+        .{ .id = "copy_image", .label = "Copy image" },
+        .{ .id = "open_file", .label = "Open file" },
+        .{ .id = "open_folder", .label = "Open folder" },
+    };
+    oriel.notification.notify(.{
+        .id = id,
+        .title = "Image received",
+        .body = body,
+        .actions = if (copied) open else with_copy,
+    }) catch {};
+}
+/// Finished inbound file transfers, on a thread of their own (the engine's
+/// event thread must not wait on files or the clipboard): one image is put
+/// on the clipboard if a HollerShare sender copied it there, and otherwise
+/// offered with Copy image; then the notification is shown, and on Android
+/// the files move to the folder chosen in Settings (`relocation`), which is
+/// why the image is read first.
+const received = struct {
+    const Image = enum { none, copied, available };
+
+    /// Start handling `json` if it's a finished file transfer (true): the
+    /// caller then leaves its notification to this.
+    fn start(json: []const u8) bool {
+        if (std.mem.indexOf(u8, json, "\"kind\":\"finished\"") == null) return false;
+        if (json.len > 4096) return false;
+        const copy = std.heap.smp_allocator.dupe(u8, json) catch return false;
+        const thread = std.Thread.spawn(.{}, run, .{copy}) catch {
+            std.heap.smp_allocator.free(copy);
+            if (android) relocation.onEvent(json);
+            return false;
+        };
+        thread.detach();
+        return true;
+    }
+
+    fn run(json: []u8) void {
+        defer std.heap.smp_allocator.free(json);
+        var arena: std.heap.ArenaAllocator = .init(std.heap.smp_allocator);
+        defer arena.deinit();
+        const gpa = arena.allocator();
+        const event = std.json.parseFromSliceLeaky(struct { id: []const u8, kind: []const u8, name: []const u8 = "", text: bool = false }, gpa, json, .{ .ignore_unknown_fields = true }) catch return;
+        const image: Image = if (event.text) .none else check(gpa, event.id) catch |err| blk: {
+            std.log.warn("looking for a received image in {s}: {s}", .{ event.id, @errorName(err) });
+            break :blk .none;
+        };
+        notify(gpa, json, image);
+        if (android and !event.text) relocation.process(gpa, event.id);
+    }
+
+    /// Whether the transfer `id` is one image, and copy it when its name
+    /// says it came from a clipboard.
+    fn check(gpa: std.mem.Allocator, id: []const u8) !Image {
+        const file = try single_image(gpa, id) orelse return .none;
+        // Android: Copy image would read the file after it moved away.
+        const offer: Image = if (android and relocation.folderChosen()) .none else .available;
+        if (!clipboard_image.isClipboardImage(file.name)) return offer;
+        copy_file(gpa, file.path) catch |err| {
+            std.log.warn("copying a received clipboard image: {s}", .{@errorName(err)});
+            return offer;
+        };
+        return .copied;
+    }
+
+    /// Hand the notification to the main thread: the engine's event with
+    /// what became of the image added.
+    fn notify(gpa: std.mem.Allocator, json: []const u8, image: Image) void {
+        var event: NotificationEvent = .{ .bytes = undefined, .len = 0 };
+        const text = if (image == .none) json else blk: {
+            const close = std.mem.lastIndexOfScalar(u8, json, '}') orelse return;
+            break :blk std.fmt.allocPrint(gpa, "{s},\"image\":\"{s}\"}}", .{ json[0..close], @tagName(image) }) catch json;
+        };
+        // Too long with the image added: the plain event still notifies.
+        const fits = if (text.len <= event.bytes.len) text else json;
+        if (fits.len > event.bytes.len) return;
+        @memcpy(event.bytes[0..fits.len], fits);
+        event.len = fits.len;
+        oriel.App.runOnMain(event, notify_main);
+    }
+};
+/// The one received file of transfer `id` when it's an image, else null.
+fn single_image(gpa: std.mem.Allocator, id: []const u8) !?relocation.File {
+    const response = try request_json(gpa, .{ .command = "received_files", .id = id });
+    const listed = try std.json.parseFromSliceLeaky(struct { ok: bool, data: ?[]const relocation.File = null }, gpa, response, .{ .ignore_unknown_fields = true });
+    if (!listed.ok) return error.TransferUnavailable;
+    const files = listed.data orelse return null;
+    if (files.len != 1 or !clipboard_image.isPngFile(files[0].name, files[0].mime)) return null;
+    return files[0];
+}
+/// Put the image file at `path` on the clipboard (any thread).
+fn copy_file(gpa: std.mem.Allocator, path: []const u8) !void {
+    const bytes = try std.Io.Dir.cwd().readFileAlloc(app_io, path, gpa, .limited(clipboard_image.max_bytes));
+    defer gpa.free(bytes);
+    // A file named .png can hold anything: only PNG goes on the clipboard.
+    if (!clipboard_image.isPng(bytes)) return error.NotPng;
+    try oriel.clipboard.writeImage(bytes);
+}
 const NotificationTask = struct {
     id: [256]u8,
     len: usize,
-    action: enum { accept, decline, open_file, open_folder, copy_text },
+    action: enum { accept, decline, open_file, open_folder, copy_text, copy_image },
 };
 export fn hollershare_notification_action(id: [*:0]const u8, action: [*:0]const u8) void {
     notification_action(std.mem.span(id), std.mem.span(action));
@@ -383,6 +504,7 @@ fn perform_notification_task(allocator: std.mem.Allocator, task: NotificationTas
     const id = task.id[0..task.len];
     switch (task.action) {
         .copy_text => try Commands.copy_transfer(allocator, .{ .id = id }),
+        .copy_image => try Commands.copy_image(allocator, .{ .id = id }),
         .open_file, .open_folder => try Commands.open_transfer(allocator, .{ .id = id, .folder = task.action == .open_folder }),
         .accept, .decline => {
             const response = try Commands.decide(allocator, .{ .id = id, .accept = task.action == .accept });
@@ -407,7 +529,8 @@ fn notification_failed(_: void) void {
 const relocation = struct {
     /// The engine's event (on the engine's thread): a finished inbound file
     /// transfer starts a move. The engine is asked for the files from the
-    /// new thread, once this event has been recorded.
+    /// new thread, once this event has been recorded. Normally `received`
+    /// calls `process` instead; this is its fallback.
     fn onEvent(json: []const u8) void {
         if (std.mem.indexOf(u8, json, "\"kind\":\"finished\"") == null) return;
         if (!folderChosen()) return;
@@ -432,11 +555,17 @@ const relocation = struct {
         const gpa = arena.allocator();
         const event = std.json.parseFromSliceLeaky(struct { id: []const u8, kind: []const u8, text: bool = false }, gpa, json, .{ .ignore_unknown_fields = true }) catch return;
         if (!std.mem.eql(u8, event.kind, "finished") or event.text) return;
+        process(gpa, event.id);
+    }
+
+    /// Move the finished transfer `id` to the folder chosen in Settings, if
+    /// one is (on a thread that may block).
+    fn process(gpa: std.mem.Allocator, id: []const u8) void {
         const saved = current_settings(gpa) catch return;
         if (!settings.usableFolderId(saved.download_folder, true)) return;
-        move(gpa, event.id, saved.download_folder, saved.download_folder_name) catch |err| {
-            std.log.warn("moving transfer {s} to the download folder: {s}", .{ event.id, @errorName(err) });
-            report(gpa, event.id, .{ .state = "failed", .folder = saved.download_folder_name, .@"error" = "HollerShare couldn't move the files. They're in HollerShare's folder." });
+        move(gpa, id, saved.download_folder, saved.download_folder_name) catch |err| {
+            std.log.warn("moving transfer {s} to the download folder: {s}", .{ id, @errorName(err) });
+            report(gpa, id, .{ .state = "failed", .folder = saved.download_folder_name, .@"error" = "HollerShare couldn't move the files. They're in HollerShare's folder." });
         };
     }
 
@@ -607,7 +736,7 @@ export fn hollershare_quit_requested() void {
 }
 
 pub const Commands = struct {
-    pub const async_commands = .{ "settings_get", "settings_save", "settings_folder", "snapshot", "select_file", "send_files", "read_clipboard", "send_text", "copy_transfer", "decide", "cancel", "visibility", "select_folder", "open_transfer", "updater_check", "updater_install", "updater_restart", "get_pending_share" };
+    pub const async_commands = .{ "settings_get", "settings_save", "settings_folder", "snapshot", "select_file", "send_files", "read_clipboard", "send_text", "copy_transfer", "copy_image", "decide", "cancel", "visibility", "select_folder", "open_transfer", "updater_check", "updater_install", "updater_restart", "get_pending_share", "camera_status", "camera_phone_start", "camera_phone_stop", "camera_find", "camera_connect", "camera_stop", "camera_switch", "camera_view", "camera_quality", "camera_setup" };
     pub const update_info = updates.info;
     pub const updater_check = updates.check;
     pub const updater_install = updates.install;
@@ -656,13 +785,11 @@ pub const Commands = struct {
     pub fn settings_save(allocator: std.mem.Allocator, io: std.Io, args: struct { device_name: []const u8 = "", default_folder: bool = false }) !SettingsView {
         const trimmed = std.mem.trim(u8, args.device_name, " \t\r\n");
         if (trimmed.len > 64) return oriel.ipc.fail("Device names can be up to 64 characters long", .{});
+        // Back to the default folder the way Settings' own control does it,
+        // so the engine saves there from now on (not only after a restart).
+        if (args.default_folder) try apply_folder(allocator, io, null);
         var next = try current_settings(allocator);
         next.device_name = trimmed;
-        if (args.default_folder) {
-            if (next.download_folder.len > 0) oriel.dialog.forgetFolder(next.download_folder);
-            next.download_folder = "";
-            next.download_folder_name = "";
-        }
         try store_settings(allocator, io, next);
         set_device_name(allocator);
         return settings_view(allocator, io);
@@ -694,10 +821,57 @@ pub const Commands = struct {
     pub fn send_files(allocator: std.mem.Allocator, args: struct { address: []const u8, name: []const u8, paths: []const []const u8 }) ![]const u8 {
         return request_json(allocator, .{ .command = "send", .address = args.address, .name = args.name, .paths = args.paths });
     }
-    pub fn read_clipboard(allocator: std.mem.Allocator) !ClipboardText {
-        const text = try oriel.clipboard.readText(allocator);
+    const unreadable_clipboard_image = "The image on the clipboard couldn't be read. Copy it again, or share it as a file";
+    /// The clipboard's text, or with no text, its image saved as a PNG in
+    /// HollerShare's cache folder (named so a HollerShare receiver puts it
+    /// on its own clipboard). Neither: empty text.
+    pub fn read_clipboard(allocator: std.mem.Allocator, io: std.Io) !ClipboardContent {
+        var text_error: ?anyerror = null;
+        const text = oriel.clipboard.readText(allocator) catch |err| blk: {
+            text_error = err;
+            break :blk "";
+        };
         if (text.len > 1024 * 1024) return oriel.ipc.fail("Clipboard text exceeds 1 MB", .{});
-        return .{ .text = text };
+        // Android's text view of an image clip is its content:// address
+        // (clipboard_image.pick decides): only read the image when needed.
+        var image_error: ?anyerror = null;
+        const png: ?[]u8 = if (clipboard_image.pick(text, .none, android) == .text) null else oriel.clipboard.readImage(allocator) catch |err| blk: {
+            image_error = err;
+            break :blk null;
+        };
+        const read: clipboard_image.ImageRead = if (png != null) .got else if (image_error != null) .failed else .none;
+        const bytes = switch (clipboard_image.pick(text, read, android)) {
+            .text => return .{ .text = text },
+            .unreadable_image => return oriel.ipc.fail(unreadable_clipboard_image, .{}),
+            .nothing => {
+                if (text_error) |err| return err;
+                if (image_error) |err| return err;
+                return .{ .text = "" };
+            },
+            .image => png.?,
+        };
+        defer allocator.free(bytes);
+        if (bytes.len > clipboard_image.max_bytes) return oriel.ipc.fail("Clipboard images can be up to 32 MB", .{});
+        const cache = try oriel.paths.appCache(allocator, .{ .name = app_id });
+        defer allocator.free(cache);
+        const dir = try std.fs.path.join(allocator, &.{ cache, "clipboard" });
+        defer allocator.free(dir);
+        const now = std.Io.Timestamp.now(io, .real).toSeconds();
+        const saved = clipboard_image.save(allocator, io, dir, bytes, now) catch |err|
+            return oriel.ipc.fail("The clipboard image couldn't be saved for sharing: {s}", .{@errorName(err)});
+        return .{ .text = "", .image = .{ .path = saved.path, .name = saved.name, .size = saved.size } };
+    }
+    /// Put the one image a transfer received on the clipboard.
+    pub fn copy_image(allocator: std.mem.Allocator, args: struct { id: []const u8 }) !void {
+        var arena: std.heap.ArenaAllocator = .init(allocator);
+        defer arena.deinit();
+        const file = try single_image(arena.allocator(), args.id) orelse return oriel.ipc.fail("This transfer isn't a single image", .{});
+        copy_file(arena.allocator(), file.path) catch |err| return switch (err) {
+            error.FileNotFound => oriel.ipc.fail("The image isn't where it was received any more", .{}),
+            error.StreamTooLong => oriel.ipc.fail("Images over 32 MB can't go on the clipboard", .{}),
+            error.NotPng => oriel.ipc.fail("Only PNG images can go on the clipboard, and this file isn't one", .{}),
+            else => oriel.ipc.fail("The image couldn't be copied: {s}", .{@errorName(err)}),
+        };
     }
     pub fn send_text(allocator: std.mem.Allocator, args: struct { address: []const u8, name: []const u8, text: []const u8 }) ![]const u8 {
         return request_json(allocator, .{ .command = "send_text", .address = args.address, .name = args.name, .text = args.text });
@@ -751,6 +925,53 @@ pub const Commands = struct {
     }
     pub fn visibility(allocator: std.mem.Allocator, args: struct { visible: bool }) ![]const u8 {
         return set_visibility(allocator, args.visible);
+    }
+    // The phone camera (src/camera/app.zig): "Use as webcam" on Android,
+    // "Phone camera" on Linux.
+    pub fn camera_status(allocator: std.mem.Allocator, io: std.Io) !camera.Status {
+        return camera.status(allocator, io);
+    }
+    pub fn camera_phone_start(allocator: std.mem.Allocator, io: std.Io) !camera.Status {
+        const name = try advertised_name(allocator);
+        camera.phoneStart(allocator, io, name) catch |err| return switch (err) {
+            error.CameraPermissionDenied => oriel.ipc.fail("HollerShare needs the camera permission to be a webcam", .{}),
+            else => oriel.ipc.fail("The webcam couldn't start: {s}", .{@errorName(err)}),
+        };
+        return camera.status(allocator, io);
+    }
+    pub fn camera_phone_stop(allocator: std.mem.Allocator, io: std.Io) !camera.Status {
+        camera.phoneStop(io);
+        return camera.status(allocator, io);
+    }
+    pub fn camera_find(allocator: std.mem.Allocator, io: std.Io) ![]const @import("camera/desktop.zig").Found {
+        return camera.find(allocator, io) catch |err| oriel.ipc.fail("Looking for phones failed: {s}", .{@errorName(err)});
+    }
+    pub fn camera_connect(allocator: std.mem.Allocator, io: std.Io, args: struct { address: []const u8, code: []const u8 }) !camera.Status {
+        const name = try advertised_name(allocator);
+        camera.connect(io, args.address, args.code, name) catch |err| return switch (err) {
+            error.InvalidCode => oriel.ipc.fail("Type the 6-digit code the phone shows", .{}),
+            error.InvalidAddress => oriel.ipc.fail("Use the phone's address, like 192.168.1.20:47311", .{}),
+            else => oriel.ipc.fail("Couldn't connect: {s}", .{@errorName(err)}),
+        };
+        return camera.status(allocator, io);
+    }
+    pub fn camera_stop(allocator: std.mem.Allocator, io: std.Io) !camera.Status {
+        camera.stop(io);
+        return camera.status(allocator, io);
+    }
+    pub fn camera_switch(io: std.Io) !void {
+        camera.switchCamera(io) catch |err| return oriel.ipc.fail("Couldn't switch cameras: {s}", .{@errorName(err)});
+    }
+    pub fn camera_view(allocator: std.mem.Allocator, io: std.Io, args: struct { rotate: u16, mirror: bool, fill: bool }) !camera.Status {
+        camera.setView(io, data_dir, .{ .rotate = args.rotate, .mirror = args.mirror, .fill = args.fill }) catch |err| return oriel.ipc.fail("Couldn't turn the picture: {s}", .{@errorName(err)});
+        return camera.status(allocator, io);
+    }
+    pub fn camera_quality(allocator: std.mem.Allocator, io: std.Io, args: struct { height: u16, fps: u8, jpeg: u8 }) !camera.Status {
+        camera.setQuality(io, data_dir, .{ .height = args.height, .fps = args.fps, .jpeg = args.jpeg }) catch |err| return oriel.ipc.fail("Couldn't change the quality: {s}", .{@errorName(err)});
+        return camera.status(allocator, io);
+    }
+    pub fn camera_setup(allocator: std.mem.Allocator, io: std.Io) !camera.SetupResult {
+        return camera.setup(allocator, io);
     }
 };
 const SettingsView = struct {
@@ -856,6 +1077,7 @@ fn start_directory(io: std.Io) []const u8 {
 pub fn main(init: std.process.Init) !u8 {
     app_io = init.io;
     load_settings(init.io);
+    camera.loadSaved(init.io, data_dir);
     const arena = init.arena.allocator();
     if (init.minimal.args.toSlice(arena)) |all_args| {
         handle_share_args(all_args);
@@ -879,6 +1101,7 @@ pub fn main(init: std.process.Init) !u8 {
     defer android_beacon.stop();
     if (builtin.abi != .android) try start_engine(init.arena.allocator());
     defer hollershare_stop();
+    defer camera.shutdown(app_io);
     defer {
         hollershare_set_event_callback(null);
         if (@hasDecl(oriel.notification, "onAction")) oriel.notification.onAction(null);

@@ -2,6 +2,44 @@
 
 Notable changes in HollerShare releases.
 
+## [1.2.0] — 2026-11-18
+
+Built on Oriel 0.20.16.
+
+### Added
+
+- **Use as webcam.** An Android phone running HollerShare streams its camera
+  to a Linux computer, which shows it to every video app as "HollerShare
+  Camera" (a v4l2loopback device, set up once with the administrator
+  password). The computer finds the phone on the network, or by the address
+  the phone shows, and pairs with the 6-digit code on the phone's screen:
+  the two agree on keys with a password-authenticated key exchange (CPace on
+  ristretto255), so the code never travels and someone watching the network
+  can't test codes against what they see, and every frame and control is
+  encrypted and authenticated (ChaCha20-Poly1305). Wrong codes slow down and
+  ten in a row turn the webcam off. The picture turns upright however the
+  phone is held; Rotate, Mirror, Fill frame, the front or back lens, and
+  480p/720p/1080p at 15/24/30 fps with four picture qualities are set from
+  the computer and remembered. A video app that already has the camera open
+  keeps its resolution and HollerShare follows it when the phone can.
+- **Clipboard images.** "Paste from clipboard" sends an image on the
+  clipboard as a PNG file named so a receiving HollerShare puts it on its own
+  clipboard; a received PNG gets a Copy image action.
+
+### Changed
+
+- A redesigned window on the desktop and on Android: a compact header with
+  Share and Webcam views instead of the landing page, Files or Text and the
+  nearby devices side by side with Activity below, errors next to what caused
+  them, a webcam flow in three steps (phone, code, live), Settings as its own
+  view that saves the device name by itself, and transfers that show the same
+  confirmation code large on both devices with one status (waiting, sending,
+  sent or received). The light theme's accent and secondary text are darker
+  for contrast, and Android's status and navigation bars follow the page's
+  light or dark colours.
+- The Quick Share engine falls back to a dynamic port when `HOLLERSHARE_PORT`
+  is taken, instead of failing to start.
+
 ## [1.1.6] — 2026-11-09
 
 Built on Oriel 0.20.15.

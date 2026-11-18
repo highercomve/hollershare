@@ -1,20 +1,30 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="color-scheme" content="light dark"><title>HollerShare</title><link rel="stylesheet" href="style.css"></head>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f5f1e9" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#1a1714" media="(prefers-color-scheme: dark)">
+<title>HollerShare</title><link rel="stylesheet" href="style.css"></head>
 <body>
 <div class="app">
 <header>
-    <div class="brand"><img id="brand-mark-img" src="brand-mark.png" width="36" height="36" alt="" aria-hidden="true"><span>HollerShare</span></div>
-  <div class="header-actions"><button id="visibility" class="presence" aria-label="Toggle device visibility">Starting Quick Share…</button><button id="settings-open" class="gear" aria-label="Settings" aria-expanded="false" title="Settings">⚙</button></div>
+  <div class="brand"><img id="brand-mark-img" src="brand-mark.png" width="28" height="28" alt="" aria-hidden="true"><span>HollerShare</span></div>
+  <nav id="view-tabs" class="seg view-tabs" aria-label="Views" hidden><button id="tab-share" class="on" aria-pressed="true">Share</button><button id="tab-webcam" aria-pressed="false">Webcam<span id="webcam-live" class="live-tag" hidden><span class="live-dot" aria-hidden="true"></span>Live</span></button></nav>
+  <button id="settings-back" class="back-button header-back" hidden>← Back</button>
+  <div class="header-actions"><button id="visibility" class="presence" role="switch" aria-checked="false" title="Turn visibility on or off"><span class="switch" aria-hidden="true"><span class="knob"></span></span><span id="visibility-text">Starting Quick Share…</span></button><button id="settings-open" class="gear" aria-label="Settings" aria-expanded="false" title="Settings"><svg class="icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg></button></div>
 </header>
 <main>
-<div class="intro"><div><p class="eyebrow">A LITTLE CLOSER. A LOT EASIER.</p><h1>From here<br>to over there.</h1><p class="lede">Share files and text with computers and Android.<br>Same network. No accounts. Just Quick Share.</p></div><div class="connection-art" aria-hidden="true"><div class="orbit"><span class="orbit-center">↗</span></div><span class="art-caption">GOOD THINGS TRAVEL.</span></div></div>
-<div id="error" class="notice error" role="alert" hidden></div>
-<section id="settings" class="panel settings" aria-labelledby="settings-title" hidden><div class="section-top"><h2 id="settings-title">Settings <span>How others see you, where files land</span></h2><button id="settings-close" class="text-button">Close</button></div>
-<div class="setting"><label for="device-name">Device name</label><input id="device-name" autocomplete="off" spellcheck="false" aria-describedby="device-name-help device-name-error"><p id="device-name-help" class="small">The name nearby devices see. Leave it empty to use this device’s name.</p><p id="device-name-error" class="field-error" role="alert" hidden></p></div>
-<div class="setting"><label id="download-label">Save received files to</label><div class="manual-row"><div id="download-current" class="path folder" role="group" aria-labelledby="download-label" aria-describedby="download-help download-dir-error"><span id="download-name" class="folder-name"></span><span id="download-detail" class="folder-detail"></span></div><button id="download-browse" class="secondary">Choose…</button></div><p id="download-help" class="small"><span id="download-help-text">New transfers are saved here.</span> <button id="download-default" class="text-button">Use default folder</button></p><p id="download-dir-error" class="field-error" role="alert" hidden></p></div>
-<div class="setting"><button id="privacy-open" class="text-button" aria-expanded="false">Privacy policy</button><p class="small">How HollerShare handles files, text and device information.</p></div>
-<div class="request-actions"><button id="settings-save" class="primary">Save <span>✓</span></button><button id="settings-reset" class="secondary">Reset to defaults</button><span id="settings-status" class="small" role="status"></span></div></section>
+<div id="error" class="notice error" role="alert" hidden><span id="error-text"></span><button id="error-dismiss" class="text-button" aria-label="Dismiss this message">Dismiss</button></div>
+
+<div id="settings-view" hidden>
+<section id="settings" class="panel settings" aria-labelledby="settings-title">
+<div class="settings-top"><h2 id="settings-title">Settings</h2><button id="settings-close" class="close-button" aria-label="Close settings" title="Close (Esc)">Close ×</button></div>
+<div class="setting"><label for="device-name">Device name</label><input id="device-name" autocomplete="off" spellcheck="false" aria-describedby="device-name-help device-name-error"><p id="device-name-help" class="small">The name nearby devices see. Leave it empty to use this device’s name.</p><p id="settings-status" class="saved" role="status"></p><p id="device-name-error" class="field-error" role="alert" hidden></p></div>
+<div class="setting"><label id="download-label">Save received files to</label><div class="manual-row"><div id="download-current" class="path folder" role="group" aria-labelledby="download-label" aria-describedby="download-help download-dir-error"><span id="download-name" class="folder-name"></span><span id="download-detail" class="folder-detail"></span></div><button id="download-browse" class="secondary">Choose…</button></div><p id="download-help" class="small"><span id="download-help-text">New transfers are saved here.</span> </p><div class="link-row"><button id="download-default" class="text-button link">Use default folder</button></div><p id="download-status" class="saved" role="status"></p><p id="download-dir-error" class="field-error" role="alert" hidden></p></div>
+<div class="settings-reset">
+<div id="reset-ask"><button id="settings-reset" class="text-button link">Reset to defaults</button><p class="small">Goes back to this device’s own name and the default folder.</p></div>
+<div id="reset-confirm" class="reset-confirm" hidden><span>Reset the name and folder?</span><button id="settings-reset-yes" class="danger">Reset</button><button id="settings-reset-no" class="secondary">Keep</button></div>
+</div>
+<div class="settings-foot"><button id="privacy-open" class="text-button link" aria-expanded="false">Privacy policy</button><span class="small">How HollerShare handles files, text and device information.</span></div>
+</section>
 <!-- privacy-policy:start -->
 <section id="privacy-policy" class="panel privacy-policy" aria-labelledby="privacy-title" hidden>
 <div class="section-top"><h2 id="privacy-title">Privacy policy</h2><button id="privacy-close" class="text-button">Close</button></div>
@@ -42,23 +52,85 @@
 <p>Updates are published at <a href="https://hollershare.foreachdeveloper.com/privacy/">the HollerShare privacy policy URL</a> with a revised effective date. App releases include an offline copy of the policy current at build time.</p>
 </section>
 <!-- privacy-policy:end -->
-<div id="requests"></div>
-<div class="workspace">
-<section class="panel files-panel"><div class="section-top"><h2>01 <span>Choose what to share</span></h2><button id="clear" class="text-button" hidden>Clear</button></div>
-<div class="share-modes"><button id="mode-files" class="secondary" aria-pressed="true">Files</button><button id="mode-text" class="text-button" aria-pressed="false">Clipboard text</button></div>
-<div id="text-compose" hidden><label for="clipboard-text">Text to share</label><textarea id="clipboard-text" rows="5" placeholder="Paste or type text to send" aria-label="Text to share"></textarea><button id="read-clipboard" class="secondary">Paste clipboard</button><p class="caption">Review your text, then choose a device. Up to 1 MB.</p></div>
-<div id="file-compose"><div id="file-list"></div>
-<div id="file-empty" class="file-empty"><div class="file-symbol">＋</div><h3>A small file. A big idea.</h3><p>Drop files on this card, or pick something to send,<br>then choose where it should go.</p></div>
-<button id="choose" class="primary">Choose files <span>＋</span></button><p class="caption">Add files one at a time. Send them together.</p></div></section>
-<section class="panel devices-panel"><div class="section-top"><h2>02 <span>Choose a device</span></h2><span id="peer-count" class="count">0</span></div>
-<div id="peers"></div>
-<div id="peer-empty" class="peer-empty"><div class="search-mark">◎</div><h3>Looking around…</h3><p>Open HollerShare on your other computer, or open Quick Share on Android and turn on receiving.</p><p class="small">Keep both devices on the same Wi-Fi network. Bluetooth helps Android discovery.</p></div>
-<div class="manual"><label for="address">Have an address?</label><div class="manual-row"><input id="address" placeholder="192.168.1.20:54321" aria-label="Device IP address and port"><button id="manual-send" class="secondary" disabled>Send ↗</button></div><p class="small">The destination must speak Quick Share.</p></div></section>
 </div>
-<section class="activity"><div class="section-top"><h2>Activity</h2><span class="small">Direct, encrypted transfers</span></div><div id="transfers"><p class="activity-empty">Your files’ next adventure starts here.</p></div></section>
-<p class="background-note small">Close the window to keep receiving. Use the tray to send files or reopen HollerShare. <button id="quit" class="text-button">Quit HollerShare</button></p>
+
+<div id="requests"></div>
+
+<div id="share-view">
+<p class="lede">Send files and text to nearby computers and Android phones. Same network, no accounts.</p>
+<div class="workspace">
+<section class="panel files-panel" aria-labelledby="what-title"><div class="section-top"><h2 id="what-title">What to share</h2><button id="clear" class="text-button" hidden>Clear</button></div>
+<div class="seg share-modes" role="group" aria-label="What to share"><button id="mode-files" class="on" aria-pressed="true">Files</button><button id="mode-text" aria-pressed="false">Text</button></div>
+<div id="text-compose" class="compose" hidden><label for="clipboard-text">Text to share</label><textarea id="clipboard-text" rows="5" placeholder="Type or paste text" aria-label="Text to share"></textarea>
+<div class="text-actions"><button id="read-clipboard" class="secondary">Paste from clipboard</button><span id="text-size" class="small" role="status">Up to 1 MB</span></div></div>
+<div id="file-compose" class="compose"><div id="file-list"></div>
+<div id="drop-zone" class="drop-zone"><div id="file-empty" class="file-empty"><div class="file-symbol" aria-hidden="true">＋</div><p class="file-empty-title">Drop files here</p><p id="drop-hint">or</p></div>
+<button id="choose" class="primary">Choose files</button></div></div></section>
+<section class="panel devices-panel" aria-labelledby="to-title"><div class="section-top"><h2 id="to-title">Send to</h2><span id="peer-count" class="badge" hidden></span></div>
+<p id="ready-hint" class="ready-hint" role="status" hidden></p>
+<div id="peers"></div>
+<p id="send-hint" class="small" hidden>Choose files or type text first, then pick a device.</p>
+<div id="peer-empty" class="searching"><div id="peer-spin" class="spin" aria-hidden="true"></div><div><p id="peer-empty-title" class="searching-title">Looking for nearby devices</p><p id="peer-help">Open HollerShare on the other computer, or Quick Share on Android set to receive.</p><p class="small">Both devices need to be on the same Wi-Fi. Bluetooth helps Android find them.</p><p id="peer-still" class="small still" hidden>HollerShare keeps looking: devices show up here as soon as they’re found.</p></div></div>
+<details id="manual" class="manual"><summary>Send to an address instead</summary><label for="address" class="field-label">Device address</label><div class="manual-row"><input id="address" placeholder="e.g. 192.168.1.20:54321" aria-describedby="manual-hint"><button id="manual-send" class="secondary" disabled>Send</button></div><p id="manual-hint" class="small">The other device must run Quick Share or HollerShare.</p></details></section>
+</div>
+<section class="activity" aria-labelledby="activity-title"><div class="section-top"><h2 id="activity-title">Activity</h2><span class="small">Direct, encrypted transfers</span></div><div id="transfers"><p class="activity-empty">No transfers yet. Files and text you send or receive show up here.</p></div></section>
+</div>
+
+<div id="webcam-view" hidden>
+<p id="webcam-lede" class="lede">Use your Android phone as a camera for video calls on this computer.</p>
+<section id="camera" class="panel camera-panel" aria-label="Webcam"><div id="camera-top" class="camera-top"><div id="camera-steps" class="stepper" hidden><div id="step-phone" class="step"><span class="step-num">1</span><span class="step-label">Phone</span></div><span class="step-line"></span><div id="step-code" class="step"><span class="step-num">2</span><span class="step-label">Code</span></div><span class="step-line"></span><div id="step-live" class="step"><span class="step-num">3</span><span id="step-live-label" class="step-label">Live</span></div></div><span id="camera-state" class="badge">Off</span></div>
+
+<div id="camera-computer" hidden>
+<div id="camera-setup" hidden><p class="big">One-time setup</p><p class="sub">Video apps see your phone as “HollerShare Camera”. Adding it needs the administrator password once, and the v4l2loopback driver from your distribution.</p><button id="camera-setup-run" class="primary auto">Set up HollerShare Camera</button><div id="camera-setup-error" class="inline-error" role="alert" hidden><span id="camera-setup-error-text"></span></div></div>
+
+<div id="camera-pick" hidden><p class="big">Pick your phone</p><p class="sub">On the phone, open HollerShare › Webcam and tap Show code.</p>
+<div id="camera-phones"></div>
+<div id="camera-searching" class="searching" hidden><div class="spin" aria-hidden="true"></div><p>Looking for phones…</p></div>
+<p id="camera-none" class="sub" hidden>No phone found yet. Check that the phone shows a code and is on the same Wi-Fi, HollerShare keeps looking every few seconds.</p>
+<div id="camera-find-row" class="row"><button id="camera-find" class="secondary">Search again</button></div>
+<div id="camera-pick-error" class="inline-error" role="alert" hidden><span id="camera-pick-error-text"></span></div>
+<details id="camera-manual"><summary>Phone not listed? Enter its address</summary><div class="manual-row"><input id="camera-address" placeholder="e.g. 192.168.1.20:47311" aria-label="Phone address"><button id="camera-address-next" class="secondary">Next</button></div><p class="small">The address is shown on the phone under the code: tap “Computer can’t find this phone?” there.</p></details>
+</div>
+
+<div id="camera-code-step" hidden><p class="big">Type the code shown on your phone</p><p id="camera-code-phone" class="sub"></p>
+<input id="camera-code-entry" class="code-entry" maxlength="6" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="6 digits" aria-label="6-digit code shown on the phone">
+<p id="camera-code-msg" class="sub" role="status">Connects by itself after the 6th digit.</p>
+<div id="camera-error" class="inline-error" role="alert" hidden><span id="camera-error-text"></span><button id="camera-retry" class="secondary" hidden>Try again</button></div>
+<div class="row"><button id="camera-back" class="secondary">Back</button></div>
+</div>
+
+<div id="camera-live" hidden>
+<div class="live-top"><div class="live-text"><p id="camera-live-title" class="big">Live</p><p id="camera-live-hint" class="sub">In your video app, pick <b>HollerShare Camera</b>.</p><p id="camera-live-size" class="sub"></p></div><button id="camera-stop" class="danger">Stop webcam</button></div>
+<p id="camera-held" class="note" hidden></p>
+<div class="live-controls"><button id="camera-switch" class="secondary">Switch camera</button><span class="controls-sep" aria-hidden="true"></span><span class="controls-label">Picture</span><div class="toggles" role="group" aria-label="Picture"><button id="camera-rotate" class="chip" title="Turn the picture a quarter turn clockwise">Rotate · 0°</button><button id="camera-mirror" class="chip" aria-pressed="false">Mirror</button><button id="camera-fill" class="chip" aria-pressed="false" title="A portrait picture fills the frame (cropped) instead of fitting it with black bars">Fill frame</button></div></div>
+<div id="camera-live-error" class="inline-error" role="alert" hidden><span id="camera-live-error-text"></span></div>
+<details id="camera-quality" class="camera-quality"><summary id="camera-quality-summary">Video quality</summary>
+<div class="quality-row"><span class="quality-label">Resolution</span><div class="seg"><button id="q-height-480">480p</button><button id="q-height-720">720p</button><button id="q-height-1080">1080p</button></div></div>
+<div class="quality-row"><span class="quality-label">Frame rate</span><div class="seg"><button id="q-fps-15">15 fps</button><button id="q-fps-24">24 fps</button><button id="q-fps-30">30 fps</button></div></div>
+<div class="quality-row"><span class="quality-label">Picture</span><div class="seg"><button id="q-jpeg-50">Light</button><button id="q-jpeg-70">Balanced</button><button id="q-jpeg-85">Sharp</button><button id="q-jpeg-95">Best</button></div></div>
+<p id="camera-quality-note" class="small">Frame rate and picture change now. A new resolution reconnects, with video apps closed.</p></details>
+</div>
+
+<div id="camera-ended" hidden><p class="big">The webcam stopped</p>
+<div class="inline-error" role="alert"><span id="camera-ended-text"></span></div>
+<p id="camera-ended-help" class="sub ended-help">Reconnect uses the same code.</p>
+<div class="row ended-actions"><button id="camera-reconnect" class="primary auto">Reconnect</button><button id="camera-start-over" class="text-button link">Pair again</button></div>
+<p class="small pair-help">Pair again: on the phone, tap Show code, then type the new code.</p>
+</div>
+</div>
+
+<div id="camera-phone" hidden>
+<div id="phone-off"><div class="head-row"><p class="big">Use this phone as your computer’s webcam</p></div><p class="sub">Tap Show code, then on the computer open HollerShare › Webcam and type it.</p><button id="phone-start" class="primary">Show code</button></div>
+<div id="phone-waiting" hidden><div class="head-row"><p class="big">Waiting for your computer</p></div><p id="phone-waiting-text" class="sub">On the computer, open HollerShare › Webcam, pick this phone and type this code.</p><p id="phone-waiting-name" class="sub">This phone shows up as <b id="phone-name">this phone’s name</b>.</p><div id="camera-code" class="camera-code" aria-label="Code"></div><details id="phone-address-fold" class="phone-address-fold" hidden><summary>Computer can’t find this phone?</summary><p class="small">On the computer, open “Phone not listed? Enter its address” and type:</p><div id="phone-address" class="address-chip"></div></details><button id="phone-cancel" class="secondary wide">Cancel</button></div>
+<div id="phone-live" hidden><div class="head-row"><p class="big"><span id="phone-live-title">In use by <b id="phone-live-computer">your computer</b></span></p></div><p id="phone-live-lens" class="lens" hidden></p><p class="sub">The picture turns upright however you hold the phone. Keep HollerShare open; the screen stays on.</p><button id="phone-stop" class="danger wide">Stop webcam</button></div>
+<div id="phone-error" class="inline-error" role="alert" hidden><span id="phone-error-text"></span></div>
+</div>
+</section>
+</div>
 </main>
-<div class="update-bar"><span id="update-status" role="status">Checking for updates…</span><button id="update-check" class="text-button">Check for updates</button><button id="update-install" class="secondary" hidden>Install update</button><button id="update-restart" class="secondary" hidden>Restart now</button></div>
-<footer><span id="identity">Connecting…</span><span id="downloads">Received files stay on this computer.</span></footer>
+<footer>
+<div class="foot-line"><span id="identity">Connecting…</span><span class="sep">·</span><span id="update-status" role="status">Checking for updates…</span><button id="update-check" class="text-button">Check for updates</button><button id="update-install" class="secondary" hidden>Install update</button><button id="update-restart" class="secondary" hidden>Restart now</button></div>
+<div class="foot-line"><span id="background-note">Closing the window keeps receiving.</span><button id="quit" class="text-button">Quit</button></div>
+</footer>
 </div><script src="app.js"></script>
 </body></html>

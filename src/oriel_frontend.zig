@@ -477,10 +477,19 @@ fn resolved(e: *ui.Engine, id: u32, ok: bool, json: []const u8) !void {
             if (failed) try showError(e, message.items) else {
                 const parsed = try answer(ok, json);
                 defer parsed.deinit();
-                const text = str(field(parsed.value, "text")) orelse "";
-                try copyInto(&s.clipboard, text);
-                try setValue(e, mid("clipboard-text"), text);
-                if (text.len == 0) try showError(e, "The clipboard has no text to share.") else try show(e, "error", false);
+                const image = field(parsed.value, "image") orelse .null;
+                if (image == .object) {
+                    // An image goes in the batch as a PNG file (named so
+                    // another HollerShare puts it on its clipboard).
+                    try setShareMode(e, false);
+                    try addFile(str(field(image, "path")) orelse return, str(field(image, "name")) orelse "", @intFromFloat(num(field(image, "size"))));
+                    try show(e, "error", false);
+                } else {
+                    const text = str(field(parsed.value, "text")) orelse "";
+                    try copyInto(&s.clipboard, text);
+                    try setValue(e, mid("clipboard-text"), text);
+                    if (text.len == 0) try showError(e, "The clipboard has no text or image to share.") else try show(e, "error", false);
+                }
             }
             try renderFiles(e);
             try renderPeers(e);

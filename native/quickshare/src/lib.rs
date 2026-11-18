@@ -337,6 +337,39 @@ async fn handle(
     }
     Ok(json!(true))
 }
+/// A configured port this process can bind, or `None` so the OS picks one
+/// (`HOLLERSHARE_PORT` unset, invalid, or already in use).
+///
+/// A fixed port can belong to another program (a container publishing it,
+/// say). RQuickShare fails its bind in that case, which would leave the app
+/// unable to receive; a dynamic port keeps sharing working, and mDNS
+/// advertises whichever port is bound.
+async fn usable_port(port: u16) -> Option<u32> {
+    if port == 0 {
+        return None;
+    }
+    match tokio::net::TcpListener::bind(("0.0.0.0", port)).await {
+        Ok(listener) => {
+            drop(listener);
+            Some(u32::from(port))
+        }
+        Err(error) => {
+            tracing::warn!("HOLLERSHARE_PORT={port} is unavailable ({error}); using a dynamic port");
+            None
+        }
+    }
+}
+/// Whether the engine's start failed because its port is taken.
+fn is_port_taken(error: &(dyn std::error::Error + Send + Sync + 'static)) -> bool {
+    error
+        .downcast_ref::<std::io::Error>()
+        .is_some_and(|e| matches!(e.kind(), std::io::ErrorKind::AddrInUse | std::io::ErrorKind::PermissionDenied))
+}
+/// The port to request from RQuickShare: `HOLLERSHARE_PORT` when usable.
+async fn listen_port() -> Option<u32> {
+    let port = std::env::var("HOLLERSHARE_PORT").ok()?.trim().parse::<u16>().ok()?;
+    usable_port(port).await
+}
 async fn run(
     mut requests: mpsc::Receiver<Envelope>,
     ready: sync_channel::Sender<Result<(), String>>,
@@ -350,20 +383,32 @@ async fn run(
         relocations: BTreeMap::new(),
         error: None,
     };
-    let port = std::env::var("HOLLERSHARE_PORT")
-        .ok()
-        .and_then(|p| p.parse::<u16>().ok())
-        .map(u32::from);
-    let mut rqs = RQS::new(Visibility::Visible, port, Some(directory));
-    let mut transfers = rqs.message_sender.subscribe();
-    let (peers_tx, mut peers) = broadcast::channel(64);
+    let port = listen_port().await;
+    let mut rqs = RQS::new(Visibility::Visible, port, Some(directory.clone()));
     let sender = match rqs.run().await {
         Ok((sender, _)) => sender,
+        // The configured port was free when checked but taken by the time
+        // the engine bound it: a dynamic port keeps receiving working.
+        Err(e) if port.is_some() && is_port_taken(e.as_ref()) => {
+            tracing::warn!("the configured port failed ({e}); retrying with a dynamic port");
+            // The bind failed before the engine started any task: nothing to
+            // stop (its stop would wait for a tracker the bind never closed).
+            rqs = RQS::new(Visibility::Visible, None, Some(directory));
+            match rqs.run().await {
+                Ok((sender, _)) => sender,
+                Err(e) => {
+                    let _ = ready.send(Err(e.to_string()));
+                    return;
+                }
+            }
+        }
         Err(e) => {
             let _ = ready.send(Err(e.to_string()));
             return;
         }
     };
+    let mut transfers = rqs.message_sender.subscribe();
+    let (peers_tx, mut peers) = broadcast::channel(64);
     if let Err(e) = rqs.discovery(peers_tx) {
         let _ = ready.send(Err(e.to_string()));
         let _ = tokio::time::timeout(Duration::from_secs(3), rqs.stop()).await;
@@ -710,6 +755,33 @@ mod tests {
         assert!(model.peers.contains_key(&live_id));
         assert!(model.peers.contains_key(&another_id));
         assert!(!model.peers.contains_key(&old_address.to_string()));
+    }
+    #[tokio::test]
+    async fn an_occupied_configured_port_falls_back_to_a_dynamic_one() {
+        let held = tokio::net::TcpListener::bind("0.0.0.0:0").await.unwrap();
+        let port = held.local_addr().unwrap().port();
+        assert_eq!(usable_port(port).await, None);
+        drop(held);
+    }
+    #[tokio::test]
+    async fn a_free_configured_port_is_kept() {
+        let probe = tokio::net::TcpListener::bind("0.0.0.0:0").await.unwrap();
+        let port = probe.local_addr().unwrap().port();
+        drop(probe);
+        assert_eq!(usable_port(port).await, Some(u32::from(port)));
+    }
+    #[tokio::test]
+    async fn a_taken_port_is_recognised_as_such() {
+        let held = tokio::net::TcpListener::bind("0.0.0.0:0").await.unwrap();
+        let port = held.local_addr().unwrap().port();
+        let error = tokio::net::TcpListener::bind(("0.0.0.0", port)).await.unwrap_err();
+        assert!(is_port_taken(&error));
+        let other = std::io::Error::other("The service wasn't first started");
+        assert!(!is_port_taken(&other));
+    }
+    #[tokio::test]
+    async fn port_zero_means_dynamic() {
+        assert_eq!(usable_port(0).await, None);
     }
     #[test]
     fn rejects_non_files_and_empty_batches() {
