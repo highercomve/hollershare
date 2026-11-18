@@ -14,6 +14,12 @@
          would hide the app from devices without one. -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+    <!-- The Wi-Fi, Bluetooth and location permissions below likewise imply required
+         hardware. Transfers work over any shared network (Wi-Fi or Ethernet), and
+         Bluetooth and location only help discovery, so none of them is required. -->
+    <uses-feature android:name="android.hardware.wifi" android:required="false" />
+    <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
+    <uses-feature android:name="android.hardware.location" android:required="false" />
     <!-- oriel:permissions begin -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />

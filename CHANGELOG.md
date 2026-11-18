@@ -2,6 +2,16 @@
 
 Notable changes in HollerShare releases.
 
+## [1.2.2] — 2026-11-18
+
+Built on Oriel 0.20.16.
+
+### Fixed
+
+- Google Play offers HollerShare on Android devices without Wi-Fi, Bluetooth
+  or location hardware: their permissions no longer make that hardware
+  required. Transfers work over any shared network, Ethernet included.
+
 ## [1.2.1] — 2026-11-18
 
 Built on Oriel 0.20.16.
